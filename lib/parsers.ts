@@ -96,6 +96,7 @@ export function parseWcCsv(text: string): { products: WcProduct[]; headers: stri
   const products: WcProduct[] = [];
 
   for (const row of res.data) {
+    if ((row["Type"] ?? "").trim().toLowerCase() !== "simple") continue;
     const sku = (row["SKU"] ?? "").trim();
     const attrs: Record<string, string> = {};
     for (let i = 1; i <= 14; i++) {
