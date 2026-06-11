@@ -51,10 +51,10 @@ function Dropzone({
     setBusy(true);
     setError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("source", source);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const res = await fetch(`/api/upload?source=${source}&name=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        body: file,
+      });
       if (!res.ok) {
         const j = await res.json().catch(() => ({ error: `Upload failed (HTTP ${res.status})` }));
         setError(j.error);

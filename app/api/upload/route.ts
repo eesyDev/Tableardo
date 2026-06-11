@@ -7,44 +7,43 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  const form = await req.formData();
-  const file = form.get("file");
-  const source = String(form.get("source") ?? "");
+  const source = req.nextUrl.searchParams.get("source") ?? "";
+  const fileName = req.nextUrl.searchParams.get("name") ?? "upload";
 
-  if (!(file instanceof File) || !["master", "wc", "zoho"].includes(source)) {
-    return NextResponse.json({ error: "file and source (master|wc|zoho) are required" }, { status: 400 });
+  if (!["master", "wc", "zoho"].includes(source)) {
+    return NextResponse.json({ error: "source (master|wc|zoho) is required" }, { status: 400 });
   }
 
+  const buf = Buffer.from(await req.arrayBuffer());
   const sources = await getSources();
   const decisions = await getDecisions();
   const uploadedAt = new Date().toISOString();
 
   try {
     if (source === "master") {
-      const buf = Buffer.from(await file.arrayBuffer());
       const products = parseMasterXlsx(buf);
       if (products.length === 0) {
         return NextResponse.json({ error: "No rows with SKU found — is this really the master file?" }, { status: 422 });
       }
-      sources.master = { fileName: file.name, uploadedAt, products };
+      sources.master = { fileName, uploadedAt, products };
       decisions.products = {};
       decisions.gaps = {};
     } else if (source === "wc") {
-      const text = await file.text();
+      const text = buf.toString("utf-8");
       const { products, headers } = parseWcCsv(text);
       if (!headers.includes("SKU") || !headers.includes("Name")) {
         return NextResponse.json({ error: "Doesn't look like a WooCommerce export: no SKU/Name columns" }, { status: 422 });
       }
-      sources.wc = { fileName: file.name, uploadedAt, products, headers };
+      sources.wc = { fileName, uploadedAt, products, headers };
       decisions.products = {};
       decisions.gaps = {};
     } else {
-      const text = await file.text();
+      const text = buf.toString("utf-8");
       const { carrierWeight, headers } = parseZohoCsv(text);
       if (!headers.some((h) => /carrier weight/i.test(h))) {
         return NextResponse.json({ error: "Zoho export doesn't have a Carrier Weight Class column" }, { status: 422 });
       }
-      sources.zoho = { fileName: file.name, uploadedAt, carrierWeight };
+      sources.zoho = { fileName, uploadedAt, carrierWeight };
     }
   } catch (e) {
     return NextResponse.json({ error: `Parsing error: ${e instanceof Error ? e.message : e}` }, { status: 422 });
