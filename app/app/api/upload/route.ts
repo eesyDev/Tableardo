@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gunzipSync } from "zlib";
-import { getSources, saveSources } from "@/lib/store";
-import { parseMasterXlsx, parseWcCsv, parseGenericCsv } from "@/lib/parsers";
+import { getSources, saveSources, getDecisions, saveDecisions } from "@/lib/store";
+
+import { parseMasterXlsx, parseWcCsv, parseZohoCsv } from "@/lib/parsers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest) {
   }
   const file = { name: fileName };
   const sources = await getSources();
+  const decisions = await getDecisions();
   const uploadedAt = new Date().toISOString();
 
   try {
@@ -33,20 +35,30 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "No rows with SKU found — is this really the master file?" }, { status: 422 });
       }
       sources.master = { fileName: file.name, uploadedAt, products };
+      // мастер изменился — старые матчи и gaps больше не валидны
+      decisions.products = {};
+      decisions.gaps = {};
     } else if (source === "wc") {
       const { products, headers } = parseWcCsv(buf.toString("utf-8"));
       if (!headers.includes("SKU") || !headers.includes("Name")) {
         return NextResponse.json({ error: "Doesn't look like a WooCommerce export: no SKU/Name columns" }, { status: 422 });
       }
       sources.wc = { fileName: file.name, uploadedAt, products, headers };
+      // каталог сайта изменился — старые матчи и gaps больше не валидны
+      decisions.products = {};
+      decisions.gaps = {};
     } else {
-      const { rows, headers } = parseGenericCsv(buf.toString("utf-8"));
-      sources.zoho = { fileName: file.name, uploadedAt, products: rows, headers };
+      const { carrierWeight, headers } = parseZohoCsv(buf.toString("utf-8"));
+      if (!headers.some((h) => /carrier weight/i.test(h))) {
+        return NextResponse.json({ error: "Zoho export doesn't have a Carrier Weight Class column" }, { status: 422 });
+      }
+      sources.zoho = { fileName: file.name, uploadedAt, carrierWeight };
     }
   } catch (e) {
     return NextResponse.json({ error: `Parsing error: ${e instanceof Error ? e.message : e}` }, { status: 422 });
   }
 
   await saveSources(sources);
+  await saveDecisions(decisions);
   return NextResponse.json({ ok: true });
 }

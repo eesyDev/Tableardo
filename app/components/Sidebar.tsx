@@ -14,15 +14,19 @@ export function Sidebar() {
     : 0;
   const pendingCats = q ? q.categories.filter((c) => !c.decided).length : 0;
   const pendingAttrs = q ? q.attributes.filter((a) => !a.decided).length : 0;
-  const gaps = q?.gaps?.length ?? 0;
+  const gaps = q ? q.gaps.filter((g) => g.missing.some((a) => !g.approved.includes(a))).length : 0;
+  const zohoMismatch = q ? q.zohoCheck?.filter((r) => r.mismatch).length ?? 0 : 0;
 
+  // queue: счётчик — это нерешённые задачи (акцентный бейдж, ✓ когда ноль);
+  // report: счётчик — справка, не требующая действий (серый бейдж)
   const items = [
-    { href: "/", label: "Data", count: null as number | null },
-    { href: "/matches", label: "Products", count: pendingMatches },
-    { href: "/categories", label: "Categories", count: pendingCats },
-    { href: "/attributes", label: "Attributes", count: pendingAttrs },
-    { href: "/gaps", label: "Missing attrs", count: gaps },
-    { href: "/export", label: "Export", count: null },
+    { href: "/", label: "Data", count: null as number | null, kind: "queue" },
+    { href: "/matches", label: "Products", count: pendingMatches, kind: "queue" },
+    { href: "/categories", label: "Categories", count: pendingCats, kind: "queue" },
+    { href: "/attributes", label: "Attributes", count: pendingAttrs, kind: "queue" },
+    { href: "/gaps", label: "Missing attrs", count: gaps, kind: "report" },
+    { href: "/zoho", label: "Zoho CW", count: zohoMismatch, kind: "report" },
+    { href: "/export", label: "Export", count: null, kind: "queue" },
   ];
 
   return (
@@ -48,7 +52,9 @@ export function Sidebar() {
       {items.map((it) => (
         <Link key={it.href} href={it.href} className={`nav-link ${pathname === it.href ? "active" : ""}`}>
           <span>{it.label}</span>
-          {it.count !== null && it.count > 0 && <span className="badge badge-accent">{it.count}</span>}
+          {it.count !== null && it.count > 0 && (
+            <span className={`badge ${it.kind === "report" ? "badge-dim" : "badge-accent"}`}>{it.count}</span>
+          )}
           {it.count === 0 && state?.sources.master && <span className="badge badge-green">✓</span>}
         </Link>
       ))}

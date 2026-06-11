@@ -15,13 +15,18 @@ export default function ExportPage() {
   const pendingMatches = q.matches.filter((m) => !m.decision && m.candidates[0]?.score !== 100).length;
   const pendingCats = q.categories.filter((c) => !c.decided).length;
   const pendingAttrs = q.attributes.filter((a) => !a.decided).length;
+  const pendingGaps = q.gaps.reduce(
+    (n, g) => n + g.missing.filter((a) => !g.approved.includes(a)).length,
+    0
+  );
+  const zohoMismatch = q.zohoCheck?.filter((r) => r.mismatch).length ?? 0;
   const newProducts = Object.values(d.products).filter((p) => p.status === "approved" && p.wcSku === null).length;
   const enriched = q.matches.filter(
     (m) => m.candidates[0]?.score === 100 || (m.decision?.status === "approved" && m.decision.wcSku)
   ).length;
 
-  const ready = pendingMatches === 0 && pendingCats === 0 && pendingAttrs === 0;
-  const gapValues = q.gaps.reduce((n, g) => n + g.missing.length, 0);
+  const ready = pendingMatches === 0 && pendingCats === 0 && pendingAttrs === 0 && pendingGaps === 0 && zohoMismatch === 0;
+  const gapValues = q.gaps.reduce((n, g) => n + g.approved.length, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,6 +41,8 @@ export default function ExportPage() {
         <CheckRow ok={pendingMatches === 0} label="Product matching" detail={pendingMatches === 0 ? "all sorted" : `${pendingMatches} left`} href="/matches" />
         <CheckRow ok={pendingCats === 0} label="Categories" detail={pendingCats === 0 ? "no duplicates" : `${pendingCats} groups left`} href="/categories" />
         <CheckRow ok={pendingAttrs === 0} label="Attributes" detail={pendingAttrs === 0 ? "all clean" : `${pendingAttrs} groups left`} href="/attributes" />
+        <CheckRow ok={pendingGaps === 0} label="Missing attributes" detail={pendingGaps === 0 ? "all approved" : `${pendingGaps} left`} href="/gaps" />
+        <CheckRow ok={zohoMismatch === 0} label="Zoho Carrier Weight" detail={zohoMismatch === 0 ? "all match" : `${zohoMismatch} mismatches`} href="/zoho" />
       </div>
 
       <div className="card p-5">
@@ -43,8 +50,8 @@ export default function ExportPage() {
           The file will contain <b style={{ color: "var(--text)" }}>{state.sources.wc.count}</b> site products (
           <b style={{ color: "var(--green)" }}>{enriched}</b> of them enriched from the master) +{" "}
           <b style={{ color: "var(--accent)" }}>{newProducts}</b> new products (drafts, Published=0). Importing it adds{" "}
-          <b style={{ color: "var(--green)" }}>{gapValues.toLocaleString("en-US")}</b> attribute values that are missing
-          on the site today.
+          <b style={{ color: "var(--green)" }}>{gapValues.toLocaleString("en-US")}</b> approved missing attribute values
+          to the site.
         </div>
         <div className="flex items-center gap-3">
           <a className="btn btn-primary" href="/api/export" download>

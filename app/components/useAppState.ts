@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Decisions, MatchRow } from "@/lib/types";
-import type { CategoryGroup, AttributeGroup, GapRow } from "@/lib/queues";
+import type { CategoryGroup, AttributeGroup, GapRow, ZohoCheckRow } from "@/lib/queues";
 
 export interface AppState {
   sources: {
@@ -16,6 +16,7 @@ export interface AppState {
     categories: CategoryGroup[];
     attributes: AttributeGroup[];
     gaps: GapRow[];
+    zohoCheck: ZohoCheckRow[];
   };
   decisions: Decisions;
 }

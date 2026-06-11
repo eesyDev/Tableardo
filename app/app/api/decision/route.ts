@@ -9,6 +9,8 @@ export const runtime = "nodejs";
  * { queue: "products-bulk", items: [{masterSku, wcSku, via}] } — массовый approve
  * { queue: "categories", variants: string[], canonical, status } — категория
  * { queue: "attributes", key, canonicalName, values, status } — атрибут
+ * { queue: "gaps", masterSku, attrName } — approve одного недостающего атрибута
+ * { queue: "gaps-undo", masterSku, attrName } — отмена gap-решения
  * { queue: "...-undo", ... } — отмена решения
  */
 export async function POST(req: NextRequest) {
@@ -65,6 +67,25 @@ export async function POST(req: NextRequest) {
     case "attributes-undo":
       delete decisions.attributes[body.key];
       break;
+
+    case "gaps": {
+      const g = decisions.gaps[body.masterSku] ?? { approved: [], at };
+      if (!g.approved.includes(body.attrName)) {
+        g.approved.push(body.attrName);
+        g.at = at;
+      }
+      decisions.gaps[body.masterSku] = g;
+      break;
+    }
+
+    case "gaps-undo": {
+      const g = decisions.gaps[body.masterSku];
+      if (g) {
+        g.approved = g.approved.filter((a) => a !== body.attrName);
+        if (g.approved.length === 0) delete decisions.gaps[body.masterSku];
+      }
+      break;
+    }
 
     default:
       return NextResponse.json({ error: "Unknown queue" }, { status: 400 });

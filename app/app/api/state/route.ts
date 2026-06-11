@@ -19,7 +19,7 @@ export async function GET() {
         ? { fileName: sources.wc.fileName, uploadedAt: sources.wc.uploadedAt, count: sources.wc.products.length }
         : null,
       zoho: sources.zoho
-        ? { fileName: sources.zoho.fileName, uploadedAt: sources.zoho.uploadedAt, count: sources.zoho.products.length }
+        ? { fileName: sources.zoho.fileName, uploadedAt: sources.zoho.uploadedAt, count: Object.keys(sources.zoho.carrierWeight).length }
         : null,
     },
     queues,

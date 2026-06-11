@@ -80,7 +80,14 @@ export async function saveSources(s: Sources) {
 }
 
 export async function getDecisions(): Promise<Decisions> {
-  return read<Decisions>("decisions.json", { products: {}, categories: {}, attributes: {} });
+  const data = await read<Decisions>("decisions.json", { products: {}, categories: {}, attributes: {}, gaps: {} });
+  // fallback для обратной совместимости: старые decisions.json без gaps / attributes и т.д.
+  return {
+    products: data.products ?? {},
+    categories: data.categories ?? {},
+    attributes: data.attributes ?? {},
+    gaps: data.gaps ?? {},
+  };
 }
 
 export async function saveDecisions(d: Decisions) {

@@ -3,6 +3,16 @@ import Papa from "papaparse";
 import type { MasterProduct, WcProduct } from "./types";
 import { cleanSku, cleanName, parseHeader } from "./normalize";
 
+function findColumn(headers: string[], patterns: string[]): string | undefined {
+  for (const h of headers) {
+    const lower = h.toLowerCase();
+    for (const p of patterns) {
+      if (lower.includes(p.toLowerCase())) return h;
+    }
+  }
+  return undefined;
+}
+
 /** Парсит мастер-XLSX: каждый лист = категория, свой набор колонок */
 export function parseMasterXlsx(buf: Buffer): MasterProduct[] {
   const wb = XLSX.read(buf, { type: "buffer" });
@@ -31,7 +41,7 @@ export function parseMasterXlsx(buf: Buffer): MasterProduct[] {
       const filterAttrs: string[] = [];
 
       headers.forEach((h, i) => {
-        if (i === skuIdx || i === nameIdx || i === catIdx || !h.name) return;
+        if (i === skuIdx || i === nameIdx || i === catIdx || !h.name || h.isNA) return;
         const v = row[i];
         if (v === null || v === undefined || String(v).trim() === "") return;
         // обрезка хвостовых бэкслешей — артефакт ручного ввода в таблице
@@ -113,7 +123,27 @@ export function parseWcCsv(text: string): { products: WcProduct[]; headers: stri
   return { products, headers };
 }
 
-/** Универсальный CSV-парсер (для Zoho) */
+/** Парсит Zoho CSV — извлекает только SKU и Carrier Weight Class */
+export function parseZohoCsv(text: string): { carrierWeight: Record<string, string>; headers: string[] } {
+  const res = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
+  const headers = res.meta.fields ?? [];
+
+  const skuCol = findColumn(headers, ["sku", "item sku", "product sku", "item #", "item#"]);
+  const cwCol = findColumn(headers, ["carrier weight", "carrier weight class", "weight class"]);
+
+  const carrierWeight: Record<string, string> = {};
+  if (skuCol && cwCol) {
+    for (const row of res.data) {
+      const sku = cleanSku(row[skuCol]);
+      const cw = (row[cwCol] ?? "").trim();
+      if (sku && cw) carrierWeight[sku] = cw;
+    }
+  }
+
+  return { carrierWeight, headers };
+}
+
+/** Универсальный CSV-парсер */
 export function parseGenericCsv(text: string): { rows: Record<string, string>[]; headers: string[] } {
   const res = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
   return { rows: res.data, headers: res.meta.fields ?? [] };

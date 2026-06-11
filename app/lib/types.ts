@@ -32,7 +32,7 @@ export interface WcProduct {
 export interface Sources {
   master: { fileName: string; uploadedAt: string; products: MasterProduct[] } | null;
   wc: { fileName: string; uploadedAt: string; products: WcProduct[]; headers: string[] } | null;
-  zoho: { fileName: string; uploadedAt: string; products: Record<string, string>[]; headers: string[] } | null;
+  zoho: { fileName: string; uploadedAt: string; carrierWeight: Record<string, string> } | null;
 }
 
 export type DecisionStatus = "approved" | "rejected";
@@ -58,6 +58,11 @@ export interface AttributeDecision {
   values: Record<string, string>;
 }
 
+export interface GapDecision {
+  approved: string[];
+  at: string;
+}
+
 export interface Decisions {
   // ключ — SKU из мастера
   products: Record<string, ProductDecision>;
@@ -65,6 +70,8 @@ export interface Decisions {
   categories: Record<string, CategoryDecision>;
   // ключ — нормализованное имя атрибута-группы
   attributes: Record<string, AttributeDecision>;
+  // ключ — SKU из мастера
+  gaps: Record<string, GapDecision>;
 }
 
 export interface MatchCandidate {

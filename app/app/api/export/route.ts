@@ -75,10 +75,13 @@ export async function GET() {
   };
 
   // слияние по каноничному имени: мастер поверх сайта, флаги сайта сохраняются
+  // approvedGaps — каноничные имена атрибутов из decisions.gaps; если передан,
+  // добавляются только approved недостающие атрибуты (для существующих товаров).
   const mergeAttrs = (
     wcAttrs: Record<string, string>,
     wcRaw: Record<string, string> | null,
-    mp: MasterProduct | null
+    mp: MasterProduct | null,
+    approvedGaps?: Set<string>
   ): AttrSlot[] => {
     const flags = wcRaw ? siteFlags(wcRaw) : new Map<string, { global: string; visible: string }>();
     const out = new Map<string, AttrSlot>();
@@ -89,6 +92,7 @@ export async function GET() {
     }
     for (const [n, v] of Object.entries(mp?.attrs ?? {})) {
       const c = canonAttr(n, v);
+      if (approvedGaps && !flags.has(c.name) && !approvedGaps.has(c.name)) continue;
       const f = flags.get(c.name);
       out.set(c.name, {
         name: c.name,
@@ -131,8 +135,8 @@ export async function GET() {
     }
 
     if (mp) {
-      // merge: атрибуты мастера поверх WC (по каноничным именам), категории канонизируются
-      attrSlots.push(mergeAttrs(wcP.attrs, wcP.raw, mp));
+      const approvedGaps = new Set(decisions.gaps[mp.sku]?.approved ?? []);
+      attrSlots.push(mergeAttrs(wcP.attrs, wcP.raw, mp, approvedGaps));
       const cats = new Set<string>();
       for (const c of wcP.categories) cats.add(canonCategory(c));
       cats.add(canonCategory(mp.category));

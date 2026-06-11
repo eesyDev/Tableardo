@@ -1,6 +1,7 @@
 import type { Sources, Decisions } from "./types";
 import { buildMatchRows, groupSimilar, similarity } from "./match";
 import { fuzzyKey } from "./normalize";
+import type { MasterProduct, WcProduct } from "./types";
 
 export interface CategoryGroup {
   /** предлагаемое каноничное имя */
@@ -189,16 +190,37 @@ export interface GapRow {
   name: string;
   /** атрибуты мастера (каноничные имена), которых нет у товара на сайте */
   missing: string[];
+  /** уже заапрувленные атрибуты (из decisions.gaps) */
+  approved: string[];
+  /** каноничное имя -> значение из мастера */
+  values: Record<string, string>;
+  /** какие из missing атрибутов станут фильтрами (были /Filter в мастере) */
+  filterAttrs: string[];
 }
 
-/** Карта "вариант имени атрибута -> каноничное имя" из утверждённых решений */
-function attrNameCanonMap(decisions: Decisions): Map<string, string> {
+/**
+ * Карта "вариант имени атрибута -> каноничное имя".
+ * Источники по приоритету:
+ * 1. Утверждённые решения по атрибутам (Attributes page)
+ * 2. Exact case-insensitive match — если имя в мастере точно совпадает с именем на сайте
+ */
+function attrNameCanonMap(decisions: Decisions, master: MasterProduct[], wc: WcProduct[]): Map<string, string> {
   const m = new Map<string, string>();
+  // 1. Утверждённые решения
   for (const [key, d] of Object.entries(decisions.attributes)) {
     if (d.status !== "approved") continue;
     m.set(key, d.canonicalName);
     for (const variant of Object.keys(d.values)) {
       if (variant.startsWith("name:")) m.set(variant.slice(5), d.canonicalName);
+    }
+  }
+  // 2. Exact CI match: если сайт уже имеет атрибут с таким же именем — не считаем его "другим"
+  const wcNamesLower = new Set<string>();
+  for (const p of wc) for (const n of Object.keys(p.attrs)) wcNamesLower.add(n.toLowerCase());
+  for (const mp of master) {
+    for (const n of Object.keys(mp.attrs)) {
+      if (m.has(n)) continue;
+      if (wcNamesLower.has(n.toLowerCase())) m.set(n, n);
     }
   }
   return m;
@@ -208,7 +230,7 @@ function attrNameCanonMap(decisions: Decisions): Map<string, string> {
 export function buildGapRows(sources: Sources, decisions: Decisions): GapRow[] {
   const master = sources.master?.products ?? [];
   const wc = sources.wc?.products ?? [];
-  const nameMap = attrNameCanonMap(decisions);
+  const nameMap = attrNameCanonMap(decisions, master, wc);
   const canon = (n: string) => nameMap.get(n) ?? n;
 
   const wcBySku = new Map(wc.filter((p) => p.sku).map((p) => [p.sku, p]));
@@ -224,14 +246,78 @@ export function buildGapRows(sources: Sources, decisions: Decisions): GapRow[] {
     if (!wcP) continue;
 
     const siteNames = new Set(Object.keys(wcP.attrs).map(canon));
-    const missing = [...new Set(
-      Object.entries(mp.attrs)
-        .filter(([n, v]) => v.trim() && !siteNames.has(canon(n)))
-        .map(([n]) => canon(n))
-    )];
-    if (missing.length > 0) rows.push({ masterSku: mp.sku, wcSku: wcP.sku, name: wcP.name || mp.name, missing });
+    const missingEntries = Object.entries(mp.attrs).filter(([n, v]) => v.trim() && !siteNames.has(canon(n)));
+    const missing = [...new Set(missingEntries.map(([n]) => canon(n)))];
+    if (missing.length > 0) {
+      const approved = decisions.gaps[mp.sku]?.approved ?? [];
+      const values: Record<string, string> = {};
+      for (const [n, v] of missingEntries) {
+        const cn = canon(n);
+        if (!values[cn]) values[cn] = v;
+      }
+      const filterAttrs = missing.filter((cn) =>
+        missingEntries.some(([n]) => canon(n) === cn && mp.filterAttrs.includes(n))
+      );
+      rows.push({ masterSku: mp.sku, wcSku: wcP.sku, name: wcP.name || mp.name, missing, approved, values, filterAttrs });
+    }
   }
   return rows.sort((a, b) => b.missing.length - a.missing.length);
+}
+
+export interface ZohoCheckRow {
+  sku: string;
+  name: string;
+  masterValue: string | null;
+  wcValue: string | null;
+  zohoValue: string | null;
+  mismatch: boolean;
+}
+
+export function buildZohoCheck(sources: Sources): ZohoCheckRow[] {
+  const zoho = sources.zoho?.carrierWeight ?? {};
+  if (Object.keys(zoho).length === 0) return [];
+
+  const masterBySku = new Map<string, MasterProduct>();
+  for (const p of sources.master?.products ?? []) masterBySku.set(p.sku, p);
+
+  const wcBySku = new Map<string, WcProduct>();
+  for (const p of sources.wc?.products ?? []) wcBySku.set(p.sku, p);
+
+  const masterCw = (mp: MasterProduct): string | null => {
+    for (const [k, v] of Object.entries(mp.attrs)) {
+      if (k.toLowerCase().includes("carrier weight")) return v;
+    }
+    return null;
+  };
+
+  const wcCw = (wp: WcProduct): string | null => {
+    for (const [k, v] of Object.entries(wp.attrs)) {
+      if (k.toLowerCase().includes("carrier weight")) return v;
+    }
+    return null;
+  };
+
+  const rows: ZohoCheckRow[] = [];
+  for (const [sku, zv] of Object.entries(zoho)) {
+    const mp = masterBySku.get(sku);
+    const wp = wcBySku.get(sku);
+    if (!mp && !wp) continue;
+
+    const mv = mp ? masterCw(mp) : null;
+    const wv = wp ? wcCw(wp) : null;
+    const mismatch = (mv !== null && mv !== zv) || (wv !== null && wv !== zv);
+
+    rows.push({
+      sku,
+      name: mp?.name || wp?.name || sku,
+      masterValue: mv,
+      wcValue: wv,
+      zohoValue: zv,
+      mismatch,
+    });
+  }
+
+  return rows.sort((a, b) => Number(b.mismatch) - Number(a.mismatch));
 }
 
 export function buildAll(sources: Sources, decisions: Decisions) {
@@ -244,5 +330,6 @@ export function buildAll(sources: Sources, decisions: Decisions) {
     categories: buildCategoryQueue(sources, decisions),
     attributes: buildAttributeQueue(sources, decisions),
     gaps: buildGapRows(sources, decisions),
+    zohoCheck: buildZohoCheck(sources),
   };
 }
