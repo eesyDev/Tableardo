@@ -51,13 +51,10 @@ function Dropzone({
     setBusy(true);
     setError(null);
     try {
-      // сжимаем на клиенте: тело запроса на Vercel ограничено 4.5 МБ
-      const gz = await new Response(file.stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
-      const res = await fetch(`/api/upload?source=${source}&name=${encodeURIComponent(file.name)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/gzip" },
-        body: gz,
-      });
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("source", source);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
       if (!res.ok) {
         const j = await res.json().catch(() => ({ error: `Upload failed (HTTP ${res.status})` }));
         setError(j.error);
