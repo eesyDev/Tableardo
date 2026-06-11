@@ -77,6 +77,8 @@ export interface MatchRow {
   masterSku: string;
   masterName: string;
   sheet: string;
+  // пометка из мастера: Duplicate / Discontinued / Old Model / ✱
+  marker: string | null;
   candidates: MatchCandidate[];
   decision: ProductDecision | null;
 }

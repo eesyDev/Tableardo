@@ -7,23 +7,23 @@ const SOURCES = [
   {
     key: "master",
     title: "Master Specs",
-    hint: "Google Sheets → XLSX, лист = категория",
+    hint: "Google Sheets → XLSX, one sheet = one category",
     accept: ".xlsx,.xls",
     badge: "Source of Truth",
   },
   {
     key: "wc",
     title: "WooCommerce",
-    hint: "Экспорт товаров с сайта, CSV",
+    hint: "Product export from the site, CSV",
     accept: ".csv",
-    badge: "Сайт",
+    badge: "Site",
   },
   {
     key: "zoho",
     title: "Zoho Inventory",
-    hint: "CSV (опционально — метаданные Zoho уже есть в WC)",
+    hint: "CSV (optional — Zoho metadata is already in the WC export)",
     accept: ".csv",
-    badge: "Опционально",
+    badge: "Optional",
   },
 ] as const;
 
@@ -55,7 +55,7 @@ function Dropzone({
     fd.append("source", source);
     const res = await fetch("/api/upload", { method: "POST", body: fd });
     if (!res.ok) {
-      const j = await res.json().catch(() => ({ error: "Ошибка загрузки" }));
+      const j = await res.json().catch(() => ({ error: "Upload failed" }));
       setError(j.error);
     } else {
       notifyStateChanged();
@@ -92,14 +92,14 @@ function Dropzone({
       />
       <div className="flex items-center justify-between">
         <span className="font-semibold text-[15px]">{title}</span>
-        <span className={`badge ${loaded ? "badge-green" : "badge-dim"}`}>{loaded ? "Загружено" : badge}</span>
+        <span className={`badge ${loaded ? "badge-green" : "badge-dim"}`}>{loaded ? "Loaded" : badge}</span>
       </div>
       <div className="text-[12.5px]" style={{ color: "var(--text-dim)" }}>
         {hint}
       </div>
       {busy && (
         <div className="text-[12.5px]" style={{ color: "var(--accent)" }}>
-          Парсинг…
+          Parsing…
         </div>
       )}
       {error && (
@@ -109,12 +109,12 @@ function Dropzone({
       )}
       {loaded && !busy && (
         <div className="mono mt-1" style={{ color: "var(--text-dim)" }}>
-          {loaded.fileName} · {loaded.count} строк
+          {loaded.fileName} · {loaded.count} rows
         </div>
       )}
       {!loaded && !busy && (
         <div className="text-[12.5px] mt-1" style={{ color: "var(--text-dim)" }}>
-          Перетащи файл или кликни
+          Drop a file here or click
         </div>
       )}
     </div>
@@ -132,9 +132,9 @@ export default function UploadPage() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-[22px] font-semibold mb-1">Данные</h1>
+        <h1 className="text-[22px] font-semibold mb-1">Data</h1>
         <p style={{ color: "var(--text-dim)" }}>
-          Загрузи выгрузки — приложение сверит их и подготовит чистый файл для сайта.
+          Upload the exports — the app reconciles them and prepares a clean file for the site.
         </p>
       </div>
 
@@ -154,12 +154,12 @@ export default function UploadPage() {
 
       {state?.sources.master && state?.sources.wc && q && (
         <div>
-          <h2 className="text-[16px] font-semibold mb-3">Сводка сверки</h2>
+          <h2 className="text-[16px] font-semibold mb-3">Reconciliation summary</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Совпали по SKU" value={autoMatched} tone="green" />
-            <StatCard label="Нужна проверка" value={needsReview} tone="amber" />
-            <StatCard label="Решено вручную" value={decided} tone="dim" />
-            <StatCard label="Только на сайте" value={q.wcOnly.length} tone="red" />
+            <StatCard label="Matched by SKU" value={autoMatched} tone="green" />
+            <StatCard label="Needs review" value={needsReview} tone="amber" />
+            <StatCard label="Decided manually" value={decided} tone="dim" />
+            <StatCard label="Site only" value={q.wcOnly.length} tone="red" />
           </div>
         </div>
       )}

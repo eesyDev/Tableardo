@@ -167,7 +167,11 @@ export function buildAttributeQueue(sources: Sources, decisions: Decisions): Att
     if (g.length === 1 && valueGroups.length === 0) continue;
 
     const nameVariants = g.map((n) => ({ value: n, sources: [...(attrMap.get(n)?.sources ?? [])] }));
-    const suggested = pickCanonical(g.map((n) => ({ value: n, count: attrMap.get(n)?.values.size ?? 0 })));
+    // предпочитаем имя с сайта: глобальный атрибут WC должен сохранить свою таксономию,
+    // иначе импорт создаст новую и фильтры слетят
+    const wcNames = g.filter((n) => attrMap.get(n)?.sources.has("wc"));
+    const pool = wcNames.length > 0 ? wcNames : g;
+    const suggested = pickCanonical(pool.map((n) => ({ value: n, count: attrMap.get(n)?.values.size ?? 0 })));
     result.push({
       suggested,
       nameVariants,
@@ -179,6 +183,57 @@ export function buildAttributeQueue(sources: Sources, decisions: Decisions): Att
   return result.sort((a, b) => Number(a.decided) - Number(b.decided));
 }
 
+export interface GapRow {
+  masterSku: string;
+  wcSku: string;
+  name: string;
+  /** атрибуты мастера (каноничные имена), которых нет у товара на сайте */
+  missing: string[];
+}
+
+/** Карта "вариант имени атрибута -> каноничное имя" из утверждённых решений */
+function attrNameCanonMap(decisions: Decisions): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const [key, d] of Object.entries(decisions.attributes)) {
+    if (d.status !== "approved") continue;
+    m.set(key, d.canonicalName);
+    for (const variant of Object.keys(d.values)) {
+      if (variant.startsWith("name:")) m.set(variant.slice(5), d.canonicalName);
+    }
+  }
+  return m;
+}
+
+/** Для каждого связанного товара: какие атрибуты мастера отсутствуют на сайте */
+export function buildGapRows(sources: Sources, decisions: Decisions): GapRow[] {
+  const master = sources.master?.products ?? [];
+  const wc = sources.wc?.products ?? [];
+  const nameMap = attrNameCanonMap(decisions);
+  const canon = (n: string) => nameMap.get(n) ?? n;
+
+  const wcBySku = new Map(wc.filter((p) => p.sku).map((p) => [p.sku, p]));
+  const rows: GapRow[] = [];
+  for (const mp of master) {
+    const d = decisions.products[mp.sku];
+    let wcP = null;
+    if (d) {
+      if (d.status === "approved" && d.wcSku) wcP = wcBySku.get(d.wcSku) ?? null;
+    } else {
+      wcP = wcBySku.get(mp.sku) ?? null;
+    }
+    if (!wcP) continue;
+
+    const siteNames = new Set(Object.keys(wcP.attrs).map(canon));
+    const missing = [...new Set(
+      Object.entries(mp.attrs)
+        .filter(([n, v]) => v.trim() && !siteNames.has(canon(n)))
+        .map(([n]) => canon(n))
+    )];
+    if (missing.length > 0) rows.push({ masterSku: mp.sku, wcSku: wcP.sku, name: wcP.name || mp.name, missing });
+  }
+  return rows.sort((a, b) => b.missing.length - a.missing.length);
+}
+
 export function buildAll(sources: Sources, decisions: Decisions) {
   const master = sources.master?.products ?? [];
   const wc = sources.wc?.products ?? [];
@@ -188,5 +243,6 @@ export function buildAll(sources: Sources, decisions: Decisions) {
     wcOnly: wcOnly.map((p) => ({ sku: p.sku, name: p.name })),
     categories: buildCategoryQueue(sources, decisions),
     attributes: buildAttributeQueue(sources, decisions),
+    gaps: buildGapRows(sources, decisions),
   };
 }

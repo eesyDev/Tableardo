@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Decisions, MatchRow } from "@/lib/types";
-import type { CategoryGroup, AttributeGroup } from "@/lib/queues";
+import type { CategoryGroup, AttributeGroup, GapRow } from "@/lib/queues";
 
 export interface AppState {
   sources: {
@@ -15,6 +15,7 @@ export interface AppState {
     wcOnly: { sku: string; name: string }[];
     categories: CategoryGroup[];
     attributes: AttributeGroup[];
+    gaps: GapRow[];
   };
   decisions: Decisions;
 }

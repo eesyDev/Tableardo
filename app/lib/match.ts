@@ -21,6 +21,14 @@ export function similarity(a: string, b: string): number {
   return Math.round((jaccard * 0.6 + lev * 0.4) * 100);
 }
 
+/** Текстовая пометка в названии мастера, на которую стоит обратить внимание при разборе */
+export function nameMarker(name: string): string | null {
+  if (/discontinued/i.test(name)) return "Discontinued";
+  if (/duplicate/i.test(name)) return "Duplicate";
+  if (/old model/i.test(name)) return "Old Model";
+  return null;
+}
+
 /**
  * Строит очередь матчинга:
  * - SKU совпал — кандидат со score 100 (auto)
@@ -40,6 +48,7 @@ export function buildMatchRows(
   const rows: MatchRow[] = [];
   for (const mp of master) {
     const decision = decisions.products[mp.sku] ?? null;
+    const marker = nameMarker(mp.name);
     const exact = wcBySku.get(mp.sku);
     let candidates: MatchCandidate[];
 
@@ -52,7 +61,7 @@ export function buildMatchRows(
         .sort((a, b) => b.score - a.score)
         .slice(0, 3);
     }
-    rows.push({ masterSku: mp.sku, masterName: mp.name, sheet: mp.sheet, candidates, decision });
+    rows.push({ masterSku: mp.sku, masterName: mp.name, sheet: mp.sheet, marker, candidates, decision });
   }
 
   // WC-товары, на которые не претендует ни один мастер-товар (ни по SKU, ни решением)

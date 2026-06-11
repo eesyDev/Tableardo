@@ -23,9 +23,9 @@ export default function MatchesPage() {
     };
   }, [rows]);
 
-  if (loading) return <Empty text="Загрузка…" />;
+  if (loading) return <Empty text="Loading…" />;
   if (!state?.sources.master || !state?.sources.wc)
-    return <Empty text="Сначала загрузи Master Specs и экспорт WooCommerce на странице «Данные»." />;
+    return <Empty text="Upload Master Specs and the WooCommerce export on the Data page first." />;
 
   const list = (filter === "wc-only" ? [] : groups[filter]).filter(
     (m) =>
@@ -38,21 +38,21 @@ export default function MatchesPage() {
     <div className="flex flex-col gap-5">
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-[22px] font-semibold mb-1">Матчинг товаров</h1>
+          <h1 className="text-[22px] font-semibold mb-1">Product matching</h1>
           <p style={{ color: "var(--text-dim)" }}>
-            Master Specs (source of truth) против каталога сайта.
+            Master Specs (source of truth) against the site catalog.
           </p>
         </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <FilterBtn active={filter === "review"} onClick={() => setFilter("review")} label={`Нужна проверка · ${groups.review.length}`} />
-        <FilterBtn active={filter === "auto"} onClick={() => setFilter("auto")} label={`SKU совпал · ${groups.auto.length}`} />
-        <FilterBtn active={filter === "decided"} onClick={() => setFilter("decided")} label={`Решённые · ${groups.decided.length}`} />
-        <FilterBtn active={filter === "wc-only"} onClick={() => setFilter("wc-only")} label={`Только на сайте · ${q!.wcOnly.length}`} />
+        <FilterBtn active={filter === "review"} onClick={() => setFilter("review")} label={`Needs review · ${groups.review.length}`} />
+        <FilterBtn active={filter === "auto"} onClick={() => setFilter("auto")} label={`SKU matched · ${groups.auto.length}`} />
+        <FilterBtn active={filter === "decided"} onClick={() => setFilter("decided")} label={`Decided · ${groups.decided.length}`} />
+        <FilterBtn active={filter === "wc-only"} onClick={() => setFilter("wc-only")} label={`Site only · ${q!.wcOnly.length}`} />
         <input
           className="input ml-auto w-[220px]"
-          placeholder="Поиск по имени или SKU"
+          placeholder="Search by name or SKU"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -62,13 +62,13 @@ export default function MatchesPage() {
         <WcOnlyList items={q!.wcOnly} search={search} />
       ) : (
         <div className="flex flex-col gap-3">
-          {list.length === 0 && <Empty text="Здесь пусто — всё разобрано." />}
+          {list.length === 0 && <Empty text="Nothing here — all sorted." />}
           {list.slice(0, 100).map((m) => (
             <MatchCard key={m.masterSku} row={m} />
           ))}
           {list.length > 100 && (
             <div className="text-center py-2 text-[12.5px]" style={{ color: "var(--text-dim)" }}>
-              Показаны первые 100 из {list.length} — сузь поиском
+              Showing the first 100 of {list.length} — narrow it down with search
             </div>
           )}
         </div>
@@ -98,18 +98,19 @@ function MatchCard({ row }: { row: MatchRow }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="mono" style={{ color: "var(--text-dim)" }}>{row.masterSku}</span>
             <span className="badge badge-dim">{row.sheet}</span>
+            {row.marker && <span className="badge badge-amber">{row.marker}</span>}
             {d && (
               <span className={`badge ${d.status === "approved" ? "badge-green" : "badge-red"}`}>
-                {d.status === "approved" ? (d.wcSku ? "связан" : "новый товар") : "отклонён"}
+                {d.status === "approved" ? (d.wcSku ? "linked" : "new product") : "rejected"}
               </span>
             )}
-            {!d && isAuto && <span className="badge badge-green">SKU совпал</span>}
+            {!d && isAuto && <span className="badge badge-green">SKU matched</span>}
           </div>
-          <div className="font-medium mt-1">{row.masterName || <i style={{ color: "var(--text-dim)" }}>без названия</i>}</div>
+          <div className="font-medium mt-1">{row.masterName || <i style={{ color: "var(--text-dim)" }}>unnamed</i>}</div>
         </div>
         {d && (
           <button className="btn btn-sm" onClick={() => postDecision({ queue: "products-undo", masterSku: row.masterSku })}>
-            Отменить
+            Undo
           </button>
         )}
       </div>
@@ -118,7 +119,7 @@ function MatchCard({ row }: { row: MatchRow }) {
         <div className="flex flex-col gap-2">
           {row.candidates.length === 0 && (
             <div className="text-[12.5px]" style={{ color: "var(--text-dim)" }}>
-              Похожих на сайте не нашлось.
+              No similar products found on the site.
             </div>
           )}
           {row.candidates.map((c) => (
@@ -139,7 +140,7 @@ function MatchCard({ row }: { row: MatchRow }) {
                     postDecision({ queue: "products", masterSku: row.masterSku, wcSku: c.wcSku, status: "approved", via: "fuzzy" })
                   }
                 >
-                  Связать
+                  Link
                 </button>
               </div>
             </div>
@@ -149,17 +150,17 @@ function MatchCard({ row }: { row: MatchRow }) {
               className="btn btn-sm"
               onClick={() => postDecision({ queue: "products", masterSku: row.masterSku, wcSku: null, status: "approved", via: "manual" })}
             >
-              Нет на сайте — новый товар
+              Not on the site — new product
             </button>
             <button
               className="btn btn-sm btn-red"
               onClick={() => postDecision({ queue: "products", masterSku: row.masterSku, wcSku: null, status: "rejected", via: "manual" })}
             >
-              Пропустить
+              Skip
             </button>
             <input
               className="input ml-auto w-[140px]"
-              placeholder="WC SKU вручную"
+              placeholder="WC SKU manually"
               value={manualSku}
               onChange={(e) => setManualSku(e.target.value)}
             />
@@ -170,7 +171,7 @@ function MatchCard({ row }: { row: MatchRow }) {
                 postDecision({ queue: "products", masterSku: row.masterSku, wcSku: manualSku.trim(), status: "approved", via: "manual" })
               }
             >
-              Связать SKU
+              Link SKU
             </button>
           </div>
         </div>
@@ -184,7 +185,7 @@ function MatchCard({ row }: { row: MatchRow }) {
             className="btn btn-sm btn-red ml-auto shrink-0"
             onClick={() => postDecision({ queue: "products", masterSku: row.masterSku, wcSku: null, status: "rejected", via: "manual" })}
           >
-            Это не пара
+            Not a match
           </button>
         </div>
       )}
@@ -204,7 +205,7 @@ function WcOnlyList({ items, search }: { items: { sku: string; name: string }[];
   return (
     <div className="card divide-y" style={{ borderColor: "var(--border)" }}>
       <div className="px-4 py-3 text-[12.5px]" style={{ color: "var(--text-dim)" }}>
-        Товары сайта, которых нет в Master Specs — стоит добавить их в мастер-таблицу.
+        Site products missing from Master Specs — consider adding them to the master sheet.
       </div>
       {filtered.map((p) => (
         <div key={p.sku || p.name} className="px-4 py-2.5 flex items-center gap-3" style={{ borderTop: "1px solid var(--border)" }}>

@@ -7,8 +7,8 @@ import type { CategoryGroup } from "@/lib/queues";
 export default function CategoriesPage() {
   const { state, loading } = useAppState();
 
-  if (loading) return <Empty text="Загрузка…" />;
-  if (!state?.sources.master) return <Empty text="Сначала загрузи данные на странице «Данные»." />;
+  if (loading) return <Empty text="Loading…" />;
+  if (!state?.sources.master) return <Empty text="Upload your data on the Data page first." />;
 
   const groups = state.queues.categories;
   const pending = groups.filter((g) => !g.decided);
@@ -17,13 +17,13 @@ export default function CategoriesPage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-[22px] font-semibold mb-1">Категории</h1>
+        <h1 className="text-[22px] font-semibold mb-1">Categories</h1>
         <p style={{ color: "var(--text-dim)" }}>
-          Похожие названия категорий из мастера и сайта. Выбери каноничное — в выгрузке дублей не будет.
+          Similar category names from the master and the site. Pick the canonical one — the export will have no duplicates.
         </p>
       </div>
 
-      {groups.length === 0 && <Empty text="Дублей категорий не найдено." />}
+      {groups.length === 0 && <Empty text="No duplicate categories found." />}
 
       {pending.map((g) => (
         <CategoryCard key={g.variants.map((v) => v.value).join("|")} group={g} />
@@ -32,7 +32,7 @@ export default function CategoriesPage() {
       {done.length > 0 && (
         <>
           <h2 className="text-[15px] font-semibold mt-2" style={{ color: "var(--text-dim)" }}>
-            Решённые · {done.length}
+            Decided · {done.length}
           </h2>
           {done.map((g) => (
             <CategoryCard key={g.variants.map((v) => v.value).join("|")} group={g} />
@@ -50,15 +50,15 @@ function CategoryCard({ group }: { group: CategoryGroup }) {
   return (
     <div className="card p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="badge badge-dim">{variants.length} варианта</span>
+        <span className="badge badge-dim">{variants.length} variants</span>
         {group.decided ? (
           <div className="flex items-center gap-2">
-            <span className="badge badge-green">решено</span>
+            <span className="badge badge-green">decided</span>
             <button
               className="btn btn-sm"
               onClick={() => postDecision({ queue: "categories-undo", variants: variants.map((v) => v.value) })}
             >
-              Отменить
+              Undo
             </button>
           </div>
         ) : (
@@ -67,7 +67,7 @@ function CategoryCard({ group }: { group: CategoryGroup }) {
               className="btn btn-sm"
               onClick={() => postDecision({ queue: "categories-separate", variants: variants.map((v) => v.value) })}
             >
-              Это разные категории
+              These are different categories
             </button>
             <button
               className="btn btn-sm btn-primary"
@@ -75,7 +75,7 @@ function CategoryCard({ group }: { group: CategoryGroup }) {
                 postDecision({ queue: "categories", variants: variants.map((v) => v.value), canonical, status: "approved" })
               }
             >
-              Объединить в «{canonical.length > 40 ? canonical.slice(0, 40) + "…" : canonical}»
+              Merge into “{canonical.length > 40 ? canonical.slice(0, 40) + "…" : canonical}”
             </button>
           </div>
         )}
@@ -104,7 +104,7 @@ function CategoryCard({ group }: { group: CategoryGroup }) {
             </span>
             {v.sources.map((s) => (
               <span key={s} className={`badge ${s === "master" ? "badge-accent" : "badge-dim"}`}>
-                {s === "master" ? "мастер" : "сайт"}
+                {s === "master" ? "master" : "site"}
               </span>
             ))}
           </label>

@@ -6,13 +6,11 @@ import type { MasterProduct } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_ATTRS = 14;
-
 export async function GET() {
   const sources = getSources();
   const decisions = getDecisions();
   if (!sources.wc || !sources.master) {
-    return NextResponse.json({ error: "Сначала загрузите оба файла" }, { status: 400 });
+    return NextResponse.json({ error: "Upload both files first" }, { status: 400 });
   }
 
   const canonCategory = (c: string) => decisions.categories[c]?.canonical ?? c;
@@ -39,30 +37,79 @@ export async function GET() {
   const masterBySku = new Map<string, MasterProduct>();
   for (const p of sources.master.products) masterBySku.set(p.sku, p);
 
-  const headers = sources.wc.headers;
+  const headers = [...sources.wc.headers];
   const outRows: Record<string, string>[] = [];
 
-  const writeAttrs = (row: Record<string, string>, attrs: Record<string, string>, filterAttrs: string[]) => {
-    // очистить старые слоты
-    for (let i = 1; i <= MAX_ATTRS; i++) {
-      row[`Attribute ${i} name`] = "";
-      row[`Attribute ${i} value(s)`] = "";
-      row[`Attribute ${i} visible`] = "";
-      row[`Attribute ${i} global`] = "";
+  // сколько слотов Attribute N есть в экспорте сайта
+  let baseSlots = 0;
+  for (const h of headers) {
+    const m = h.match(/^Attribute (\d+) name$/);
+    if (m) baseSlots = Math.max(baseSlots, Number(m[1]));
+  }
+
+  // импортёр WC режет value(s) по запятым; запятая в числе ("3,200 kg") экранируется как "\,"
+  const escapeCommas = (v: string) => v.replace(/(\d),(?=\d{3})/g, "$1\\,");
+
+  interface AttrSlot {
+    name: string;
+    value: string;
+    visible: string;
+    global: string;
+  }
+
+  // флаги global/visible с сайта по каноничному имени атрибута — их нельзя терять,
+  // иначе импорт превратит глобальные атрибуты (фильтры) в кастомные
+  const siteFlags = (raw: Record<string, string>): Map<string, { global: string; visible: string }> => {
+    const m = new Map<string, { global: string; visible: string }>();
+    for (let i = 1; i <= baseSlots; i++) {
+      const n = raw[`Attribute ${i} name`];
+      if (!n) continue;
+      m.set(attrNameMap.get(n) ?? n, {
+        global: raw[`Attribute ${i} global`] || "0",
+        visible: raw[`Attribute ${i} visible`] || "1",
+      });
     }
-    let slot = 1;
-    for (const [n, v] of Object.entries(attrs)) {
-      if (slot > MAX_ATTRS) break;
+    return m;
+  };
+
+  // слияние по каноничному имени: мастер поверх сайта, флаги сайта сохраняются
+  const mergeAttrs = (
+    wcAttrs: Record<string, string>,
+    wcRaw: Record<string, string> | null,
+    mp: MasterProduct | null
+  ): AttrSlot[] => {
+    const flags = wcRaw ? siteFlags(wcRaw) : new Map<string, { global: string; visible: string }>();
+    const out = new Map<string, AttrSlot>();
+    for (const [n, v] of Object.entries(wcAttrs)) {
       const c = canonAttr(n, v);
-      row[`Attribute ${slot} name`] = c.name;
-      row[`Attribute ${slot} value(s)`] = c.value;
-      row[`Attribute ${slot} visible`] = "1";
-      row[`Attribute ${slot} global`] = filterAttrs.includes(n) ? "1" : "0";
-      slot++;
+      const f = flags.get(c.name);
+      out.set(c.name, { name: c.name, value: c.value, visible: f?.visible ?? "1", global: f?.global ?? "0" });
+    }
+    for (const [n, v] of Object.entries(mp?.attrs ?? {})) {
+      const c = canonAttr(n, v);
+      const f = flags.get(c.name);
+      out.set(c.name, {
+        name: c.name,
+        value: c.value,
+        visible: f?.visible ?? "1",
+        global: f?.global ?? (mp!.filterAttrs.includes(n) ? "1" : "0"),
+      });
+    }
+    return [...out.values()];
+  };
+
+  const writeAttrs = (row: Record<string, string>, slots: AttrSlot[], totalSlots: number) => {
+    for (let i = 1; i <= totalSlots; i++) {
+      const s = slots[i - 1];
+      row[`Attribute ${i} name`] = s?.name ?? "";
+      row[`Attribute ${i} value(s)`] = s ? escapeCommas(s.value) : "";
+      row[`Attribute ${i} visible`] = s?.visible ?? "";
+      row[`Attribute ${i} global`] = s?.global ?? "";
     }
   };
 
   // 1) существующие товары сайта, обогащённые мастером
+  const attrSlots: (AttrSlot[] | null)[] = [];
   for (const wcP of sources.wc.products) {
     const row: Record<string, string> = { ...wcP.raw };
 
@@ -82,14 +129,14 @@ export async function GET() {
     }
 
     if (mp) {
-      // merge: атрибуты мастера поверх WC, категории канонизируются
-      const merged = { ...wcP.attrs, ...mp.attrs };
-      writeAttrs(row, merged, mp.filterAttrs);
+      // merge: атрибуты мастера поверх WC (по каноничным именам), категории канонизируются
+      attrSlots.push(mergeAttrs(wcP.attrs, wcP.raw, mp));
       const cats = new Set<string>();
       for (const c of wcP.categories) cats.add(canonCategory(c));
       cats.add(canonCategory(mp.category));
       row["Categories"] = [...cats].join(", ");
     } else {
+      attrSlots.push(null); // строка сайта без пары — атрибуты не трогаем
       row["Categories"] = wcP.categories.map(canonCategory).join(", ");
     }
     outRows.push(row);
@@ -105,8 +152,24 @@ export async function GET() {
     row["Name"] = mp.name;
     row["Published"] = "0"; // черновик — цены и описания заполняются на сайте
     row["Categories"] = canonCategory(mp.category);
-    writeAttrs(row, mp.attrs, mp.filterAttrs);
+    attrSlots.push(mergeAttrs({}, null, mp));
     outRows.push(row);
+  }
+
+  // атрибутов может быть больше, чем слотов в экспорте сайта — расширяем заголовки,
+  // импортёр WC маппит колонки Attribute N по имени
+  const maxSlots = Math.max(baseSlots, ...attrSlots.map((s) => s?.length ?? 0));
+  if (maxSlots > baseSlots) {
+    const lastIdx = headers.indexOf(`Attribute ${baseSlots} global`);
+    const extra: string[] = [];
+    for (let i = baseSlots + 1; i <= maxSlots; i++) {
+      extra.push(`Attribute ${i} name`, `Attribute ${i} value(s)`, `Attribute ${i} visible`, `Attribute ${i} global`);
+    }
+    headers.splice(lastIdx + 1, 0, ...extra);
+  }
+  for (let i = 0; i < outRows.length; i++) {
+    const slots = attrSlots[i];
+    if (slots) writeAttrs(outRows[i], slots, maxSlots);
   }
 
   const csv = Papa.unparse({ fields: headers, data: outRows.map((r) => headers.map((h) => r[h] ?? "")) });

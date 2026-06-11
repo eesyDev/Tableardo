@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
       break;
 
     default:
-      return NextResponse.json({ error: "Неизвестная очередь" }, { status: 400 });
+      return NextResponse.json({ error: "Unknown queue" }, { status: 400 });
   }
 
   saveDecisions(decisions);

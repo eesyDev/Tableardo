@@ -14,13 +14,15 @@ export function Sidebar() {
     : 0;
   const pendingCats = q ? q.categories.filter((c) => !c.decided).length : 0;
   const pendingAttrs = q ? q.attributes.filter((a) => !a.decided).length : 0;
+  const gaps = q?.gaps?.length ?? 0;
 
   const items = [
-    { href: "/", label: "Данные", count: null as number | null },
-    { href: "/matches", label: "Товары", count: pendingMatches },
-    { href: "/categories", label: "Категории", count: pendingCats },
-    { href: "/attributes", label: "Атрибуты", count: pendingAttrs },
-    { href: "/export", label: "Экспорт", count: null },
+    { href: "/", label: "Data", count: null as number | null },
+    { href: "/matches", label: "Products", count: pendingMatches },
+    { href: "/categories", label: "Categories", count: pendingCats },
+    { href: "/attributes", label: "Attributes", count: pendingAttrs },
+    { href: "/gaps", label: "Missing attrs", count: gaps },
+    { href: "/export", label: "Export", count: null },
   ];
 
   return (
@@ -53,7 +55,7 @@ export function Sidebar() {
 
       <div className="mt-auto px-3 text-[11px]" style={{ color: "var(--text-dim)" }}>
         {state?.sources.master && <div>Master: {state.sources.master.count} SKU</div>}
-        {state?.sources.wc && <div>Сайт: {state.sources.wc.count} товаров</div>}
+        {state?.sources.wc && <div>Site: {state.sources.wc.count} products</div>}
       </div>
     </aside>
   );

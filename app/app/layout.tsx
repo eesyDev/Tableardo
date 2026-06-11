@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Catalog Sync — JMA",
-  description: "Сверка каталога: Master Specs ↔ WooCommerce ↔ Zoho",
+  description: "Catalog reconciliation: Master Specs ↔ WooCommerce ↔ Zoho",
 };
 
 export default function RootLayout({

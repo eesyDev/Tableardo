@@ -7,8 +7,8 @@ import type { AttributeGroup } from "@/lib/queues";
 export default function AttributesPage() {
   const { state, loading } = useAppState();
 
-  if (loading) return <Empty text="Загрузка…" />;
-  if (!state?.sources.master) return <Empty text="Сначала загрузи данные на странице «Данные»." />;
+  if (loading) return <Empty text="Loading…" />;
+  if (!state?.sources.master) return <Empty text="Upload your data on the Data page first." />;
 
   const groups = state.queues.attributes;
   const pending = groups.filter((g) => !g.decided);
@@ -17,13 +17,13 @@ export default function AttributesPage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-[22px] font-semibold mb-1">Атрибуты</h1>
+        <h1 className="text-[22px] font-semibold mb-1">Attributes</h1>
         <p style={{ color: "var(--text-dim)" }}>
-          Дубли имён атрибутов и расхождения в значениях. Утверждённые правила применяются при экспорте.
+          Duplicate attribute names and value mismatches. Approved rules are applied on export.
         </p>
       </div>
 
-      {groups.length === 0 && <Empty text="Расхождений в атрибутах не найдено." />}
+      {groups.length === 0 && <Empty text="No attribute mismatches found." />}
 
       {pending.map((g) => (
         <AttributeCard key={g.suggested} group={g} />
@@ -32,7 +32,7 @@ export default function AttributesPage() {
       {done.length > 0 && (
         <>
           <h2 className="text-[15px] font-semibold mt-2" style={{ color: "var(--text-dim)" }}>
-            Решённые · {done.length}
+            Decided · {done.length}
           </h2>
           {done.map((g) => (
             <AttributeCard key={g.suggested} group={g} />
@@ -73,20 +73,20 @@ function AttributeCard({ group }: { group: AttributeGroup }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-semibold">{group.suggested}</span>
-          {group.isFilter && <span className="badge badge-accent">фильтр на сайте</span>}
-          {group.nameVariants.length > 1 && <span className="badge badge-amber">{group.nameVariants.length} имени</span>}
-          {group.valueGroups.length > 0 && <span className="badge badge-dim">{group.valueGroups.length} групп значений</span>}
+          {group.isFilter && <span className="badge badge-accent">site filter</span>}
+          {group.nameVariants.length > 1 && <span className="badge badge-amber">{group.nameVariants.length} names</span>}
+          {group.valueGroups.length > 0 && <span className="badge badge-dim">{group.valueGroups.length} value groups</span>}
         </div>
         {group.decided ? (
           <div className="flex items-center gap-2">
-            <span className="badge badge-green">решено</span>
+            <span className="badge badge-green">decided</span>
             <button className="btn btn-sm" onClick={() => postDecision({ queue: "attributes-undo", key: group.suggested })}>
-              Отменить
+              Undo
             </button>
           </div>
         ) : (
           <button className="btn btn-sm btn-primary" onClick={approve}>
-            Утвердить
+            Approve
           </button>
         )}
       </div>
@@ -94,7 +94,7 @@ function AttributeCard({ group }: { group: AttributeGroup }) {
       {group.nameVariants.length > 1 && (
         <div className="flex flex-col gap-1.5">
           <div className="text-[12px] font-medium" style={{ color: "var(--text-dim)" }}>
-            ИМЯ АТРИБУТА
+            ATTRIBUTE NAME
           </div>
           {group.nameVariants.map((v) => (
             <label
@@ -115,7 +115,7 @@ function AttributeCard({ group }: { group: AttributeGroup }) {
               <span className="text-[13px] flex-1">{v.value}</span>
               {v.sources.map((s) => (
                 <span key={s} className={`badge ${s === "master" ? "badge-accent" : "badge-dim"}`}>
-                  {s === "master" ? "мастер" : "сайт"}
+                  {s === "master" ? "master" : "site"}
                 </span>
               ))}
             </label>
@@ -127,7 +127,7 @@ function AttributeCard({ group }: { group: AttributeGroup }) {
         <div key={i} className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="text-[12px] font-medium" style={{ color: "var(--text-dim)" }}>
-              ЗНАЧЕНИЯ · ГРУППА {i + 1}
+              VALUES · GROUP {i + 1}
             </div>
             <button
               className="btn btn-sm"
@@ -146,7 +146,7 @@ function AttributeCard({ group }: { group: AttributeGroup }) {
                 })
               }
             >
-              {separate.has(i) ? "оставим как есть" : "не объединять"}
+              {separate.has(i) ? "keeping as is" : "don't merge"}
             </button>
           </div>
           <div className="flex flex-wrap gap-1.5" style={{ opacity: separate.has(i) ? 0.45 : 1 }}>

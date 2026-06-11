@@ -5,9 +5,9 @@ import { useAppState } from "@/components/useAppState";
 export default function ExportPage() {
   const { state, loading } = useAppState();
 
-  if (loading) return <Empty text="Загрузка…" />;
+  if (loading) return <Empty text="Loading…" />;
   if (!state?.sources.master || !state?.sources.wc)
-    return <Empty text="Сначала загрузи Master Specs и экспорт WooCommerce." />;
+    return <Empty text="Upload Master Specs and the WooCommerce export first." />;
 
   const q = state.queues;
   const d = state.decisions;
@@ -25,31 +25,31 @@ export default function ExportPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-[22px] font-semibold mb-1">Экспорт</h1>
+        <h1 className="text-[22px] font-semibold mb-1">Export</h1>
         <p style={{ color: "var(--text-dim)" }}>
-          Итоговый CSV в формате импорта WooCommerce: товары сайта, обогащённые мастером, плюс новые товары черновиками.
+          Final CSV in WooCommerce import format: site products enriched from the master, plus new products as drafts.
         </p>
       </div>
 
       <div className="card p-5 flex flex-col gap-3">
-        <CheckRow ok={pendingMatches === 0} label="Матчинг товаров" detail={pendingMatches === 0 ? "всё разобрано" : `осталось ${pendingMatches}`} href="/matches" />
-        <CheckRow ok={pendingCats === 0} label="Категории" detail={pendingCats === 0 ? "дублей нет" : `осталось ${pendingCats} групп`} href="/categories" />
-        <CheckRow ok={pendingAttrs === 0} label="Атрибуты" detail={pendingAttrs === 0 ? "всё чисто" : `осталось ${pendingAttrs} групп`} href="/attributes" />
+        <CheckRow ok={pendingMatches === 0} label="Product matching" detail={pendingMatches === 0 ? "all sorted" : `${pendingMatches} left`} href="/matches" />
+        <CheckRow ok={pendingCats === 0} label="Categories" detail={pendingCats === 0 ? "no duplicates" : `${pendingCats} groups left`} href="/categories" />
+        <CheckRow ok={pendingAttrs === 0} label="Attributes" detail={pendingAttrs === 0 ? "all clean" : `${pendingAttrs} groups left`} href="/attributes" />
       </div>
 
       <div className="card p-5">
         <div className="text-[13px] mb-4" style={{ color: "var(--text-dim)" }}>
-          В файл войдёт: <b style={{ color: "var(--text)" }}>{state.sources.wc.count}</b> товаров сайта (из них{" "}
-          <b style={{ color: "var(--green)" }}>{enriched}</b> обогащены данными мастера) +{" "}
-          <b style={{ color: "var(--accent)" }}>{newProducts}</b> новых товаров (черновики, Published=0).
+          The file will contain <b style={{ color: "var(--text)" }}>{state.sources.wc.count}</b> site products (
+          <b style={{ color: "var(--green)" }}>{enriched}</b> of them enriched from the master) +{" "}
+          <b style={{ color: "var(--accent)" }}>{newProducts}</b> new products (drafts, Published=0).
         </div>
         <div className="flex items-center gap-3">
           <a className="btn btn-primary" href="/api/export" download>
-            Скачать WooCommerce CSV
+            Download WooCommerce CSV
           </a>
           {!ready && (
             <span className="text-[12.5px]" style={{ color: "var(--amber)" }}>
-              Можно скачать и сейчас — нерешённые позиции просто останутся как на сайте.
+              You can download now — undecided items will simply stay as they are on the site.
             </span>
           )}
         </div>

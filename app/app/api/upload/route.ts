@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   const source = String(form.get("source") ?? "");
 
   if (!(file instanceof File) || !["master", "wc", "zoho"].includes(source)) {
-    return NextResponse.json({ error: "Нужны file и source (master|wc|zoho)" }, { status: 400 });
+    return NextResponse.json({ error: "file and source (master|wc|zoho) are required" }, { status: 400 });
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
@@ -21,13 +21,13 @@ export async function POST(req: NextRequest) {
     if (source === "master") {
       const products = parseMasterXlsx(buf);
       if (products.length === 0) {
-        return NextResponse.json({ error: "Не нашёл ни одной строки с SKU — это точно мастер-файл?" }, { status: 422 });
+        return NextResponse.json({ error: "No rows with SKU found — is this really the master file?" }, { status: 422 });
       }
       sources.master = { fileName: file.name, uploadedAt, products };
     } else if (source === "wc") {
       const { products, headers } = parseWcCsv(buf.toString("utf-8"));
       if (!headers.includes("SKU") || !headers.includes("Name")) {
-        return NextResponse.json({ error: "Не похоже на экспорт WooCommerce: нет колонок SKU/Name" }, { status: 422 });
+        return NextResponse.json({ error: "Doesn't look like a WooCommerce export: no SKU/Name columns" }, { status: 422 });
       }
       sources.wc = { fileName: file.name, uploadedAt, products, headers };
     } else {
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       sources.zoho = { fileName: file.name, uploadedAt, products: rows, headers };
     }
   } catch (e) {
-    return NextResponse.json({ error: `Ошибка парсинга: ${e instanceof Error ? e.message : e}` }, { status: 422 });
+    return NextResponse.json({ error: `Parsing error: ${e instanceof Error ? e.message : e}` }, { status: 422 });
   }
 
   saveSources(sources);
