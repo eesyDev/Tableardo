@@ -95,6 +95,7 @@ export function parseWcCsv(text: string): { products: WcProduct[]; headers: stri
   const headers = res.meta.fields ?? [];
   const products: WcProduct[] = [];
 
+  const heavyCols = new Set(["Description", "Short description", "Images", "Tags"]);
   for (const row of res.data) {
     if ((row["Type"] ?? "").trim().toLowerCase() !== "simple") continue;
     const sku = (row["SKU"] ?? "").trim();
@@ -104,6 +105,15 @@ export function parseWcCsv(text: string): { products: WcProduct[]; headers: stri
       const av = (row[`Attribute ${i} value(s)`] ?? "").trim();
       if (an && av) attrs[an] = av;
     }
+
+    // отсекаем тяжёлые/ненужные поля из raw — иначе Redis не тянет гигантский JSON
+    const raw: Record<string, string> = {};
+    for (const [k, v] of Object.entries(row)) {
+      if (k.startsWith("Meta:")) continue;
+      if (heavyCols.has(k)) continue;
+      raw[k] = v;
+    }
+
     products.push({
       id: row["ID"] ?? "",
       sku,
@@ -117,8 +127,8 @@ export function parseWcCsv(text: string): { products: WcProduct[]; headers: stri
       regularPrice: row["Regular price"] ?? "",
       salePrice: row["Sale price"] ?? "",
       stock: row["Stock"] ?? "",
-      images: row["Images"] ?? "",
-      raw: row,
+      images: "",
+      raw,
     });
   }
   return { products, headers };
