@@ -1,20 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
+import { gunzipSync } from "zlib";
 import { getSources, saveSources } from "@/lib/store";
 import { parseMasterXlsx, parseWcCsv, parseGenericCsv } from "@/lib/parsers";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
+// Тело запроса — файл, сжатый клиентом gzip'ом (лимит Vercel на запрос — 4.5 МБ),
+// source и имя файла — в query.
 export async function POST(req: NextRequest) {
-  const form = await req.formData();
-  const file = form.get("file");
-  const source = String(form.get("source") ?? "");
+  const source = req.nextUrl.searchParams.get("source") ?? "";
+  const fileName = req.nextUrl.searchParams.get("name") ?? "upload";
 
-  if (!(file instanceof File) || !["master", "wc", "zoho"].includes(source)) {
-    return NextResponse.json({ error: "file and source (master|wc|zoho) are required" }, { status: 400 });
+  if (!["master", "wc", "zoho"].includes(source)) {
+    return NextResponse.json({ error: "source (master|wc|zoho) is required" }, { status: 400 });
   }
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  const sources = getSources();
+  let buf: Buffer;
+  try {
+    buf = gunzipSync(Buffer.from(await req.arrayBuffer()));
+  } catch {
+    return NextResponse.json({ error: "Corrupted upload — please try again" }, { status: 400 });
+  }
+  const file = { name: fileName };
+  const sources = await getSources();
   const uploadedAt = new Date().toISOString();
 
   try {
@@ -38,6 +47,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Parsing error: ${e instanceof Error ? e.message : e}` }, { status: 422 });
   }
 
-  saveSources(sources);
+  await saveSources(sources);
   return NextResponse.json({ ok: true });
 }

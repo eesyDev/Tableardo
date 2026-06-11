@@ -13,7 +13,7 @@ export const runtime = "nodejs";
  */
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const decisions = getDecisions();
+  const decisions = await getDecisions();
   const at = new Date().toISOString();
 
   switch (body.queue) {
@@ -70,6 +70,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unknown queue" }, { status: 400 });
   }
 
-  saveDecisions(decisions);
+  await saveDecisions(decisions);
   return NextResponse.json({ ok: true });
 }

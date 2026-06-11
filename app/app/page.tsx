@@ -50,15 +50,22 @@ function Dropzone({
   async function upload(file: File) {
     setBusy(true);
     setError(null);
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("source", source);
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({ error: "Upload failed" }));
-      setError(j.error);
-    } else {
-      notifyStateChanged();
+    try {
+      // сжимаем на клиенте: тело запроса на Vercel ограничено 4.5 МБ
+      const gz = await new Response(file.stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+      const res = await fetch(`/api/upload?source=${source}&name=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/gzip" },
+        body: gz,
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({ error: `Upload failed (HTTP ${res.status})` }));
+        setError(j.error);
+      } else {
+        notifyStateChanged();
+      }
+    } catch (e) {
+      setError(`Upload failed: ${e instanceof Error ? e.message : e}`);
     }
     setBusy(false);
   }
@@ -129,6 +136,19 @@ export default function UploadPage() {
   const needsReview = q ? q.matches.filter((m) => !m.decision && m.candidates[0]?.score !== 100).length : 0;
   const decided = q ? q.matches.filter((m) => m.decision).length : 0;
 
+  // прогресс по очередям и эффект будущего импорта
+  const totalMaster = q?.matches.length ?? 0;
+  const productsDone = autoMatched + decided;
+  const catsTotal = q?.categories.length ?? 0;
+  const catsDone = q ? q.categories.filter((c) => c.decided).length : 0;
+  const attrsTotal = q?.attributes.length ?? 0;
+  const attrsDone = q ? q.attributes.filter((a) => a.decided).length : 0;
+  const doneAll = productsDone + catsDone + attrsDone;
+  const totalAll = totalMaster + catsTotal + attrsTotal;
+  const readiness = totalAll ? Math.round((doneAll / totalAll) * 100) : 0;
+  const gapProducts = q?.gaps.length ?? 0;
+  const gapValues = q ? q.gaps.reduce((n, g) => n + g.missing.length, 0) : 0;
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -153,17 +173,62 @@ export default function UploadPage() {
       </div>
 
       {state?.sources.master && state?.sources.wc && q && (
-        <div>
-          <h2 className="text-[16px] font-semibold mb-3">Reconciliation summary</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="Matched by SKU" value={autoMatched} tone="green" />
-            <StatCard label="Needs review" value={needsReview} tone="amber" />
-            <StatCard label="Decided manually" value={decided} tone="dim" />
-            <StatCard label="Site only" value={q.wcOnly.length} tone="red" />
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="card p-6 flex flex-col gap-4">
+              <div className="flex items-baseline justify-between">
+                <span className="font-semibold text-[15px]">Reconciliation progress</span>
+                <span className="text-[26px] font-semibold" style={{ color: "var(--accent)" }}>
+                  {readiness}%
+                </span>
+              </div>
+              <ProgressRow label="Products" done={productsDone} total={totalMaster} href="/matches" />
+              <ProgressRow label="Categories" done={catsDone} total={catsTotal} href="/categories" />
+              <ProgressRow label="Attributes" done={attrsDone} total={attrsTotal} href="/attributes" />
+            </div>
+
+            <div className="card p-6 flex flex-col gap-3">
+              <span className="font-semibold text-[15px]">Import impact</span>
+              <div className="text-[13px] leading-relaxed" style={{ color: "var(--text-dim)" }}>
+                Importing the export file will add{" "}
+                <b style={{ color: "var(--green)" }}>{gapValues.toLocaleString("en-US")}</b> attribute values across{" "}
+                <b style={{ color: "var(--text)" }}>{gapProducts}</b> products that are missing them on the site today.
+              </div>
+              <a href="/gaps" className="btn btn-sm self-start mt-auto">
+                See what each product is missing →
+              </a>
+            </div>
           </div>
-        </div>
+
+          <div>
+            <h2 className="text-[16px] font-semibold mb-3">Reconciliation summary</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard label="Matched by SKU" value={autoMatched} tone="green" />
+              <StatCard label="Needs review" value={needsReview} tone="amber" />
+              <StatCard label="Decided manually" value={decided} tone="dim" />
+              <StatCard label="Site only" value={q.wcOnly.length} tone="red" />
+            </div>
+          </div>
+        </>
       )}
     </div>
+  );
+}
+
+function ProgressRow({ label, done, total, href }: { label: string; done: number; total: number; href: string }) {
+  const pct = total ? Math.round((done / total) * 100) : 100;
+  return (
+    <a href={href} className="flex flex-col gap-1.5 group">
+      <div className="flex items-center justify-between text-[12.5px]">
+        <span className="font-medium group-hover:underline">{label}</span>
+        <span className="mono" style={{ color: "var(--text-dim)" }}>
+          {done} / {total}
+        </span>
+      </div>
+      <div className="progress">
+        <div style={{ width: `${pct}%`, background: pct === 100 ? "var(--green)" : "var(--accent)" }} />
+      </div>
+    </a>
   );
 }
 

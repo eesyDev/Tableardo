@@ -21,6 +21,7 @@ export default function ExportPage() {
   ).length;
 
   const ready = pendingMatches === 0 && pendingCats === 0 && pendingAttrs === 0;
+  const gapValues = q.gaps.reduce((n, g) => n + g.missing.length, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,7 +42,9 @@ export default function ExportPage() {
         <div className="text-[13px] mb-4" style={{ color: "var(--text-dim)" }}>
           The file will contain <b style={{ color: "var(--text)" }}>{state.sources.wc.count}</b> site products (
           <b style={{ color: "var(--green)" }}>{enriched}</b> of them enriched from the master) +{" "}
-          <b style={{ color: "var(--accent)" }}>{newProducts}</b> new products (drafts, Published=0).
+          <b style={{ color: "var(--accent)" }}>{newProducts}</b> new products (drafts, Published=0). Importing it adds{" "}
+          <b style={{ color: "var(--green)" }}>{gapValues.toLocaleString("en-US")}</b> attribute values that are missing
+          on the site today.
         </div>
         <div className="flex items-center gap-3">
           <a className="btn btn-primary" href="/api/export" download>

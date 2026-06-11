@@ -6,8 +6,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const sources = getSources();
-  const decisions = getDecisions();
+  const sources = await getSources();
+  const decisions = await getDecisions();
   const queues = buildAll(sources, decisions);
 
   return NextResponse.json({

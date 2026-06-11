@@ -2,13 +2,20 @@ import fs from "fs";
 import path from "path";
 import type { Sources, Decisions } from "./types";
 
+// Два бэкенда: локально — файлы в data/, на Vercel (эфемерная ФС) — Vercel Blob.
+// Тёплый инстанс держит данные в памяти и не перечитывает блоб на каждый запрос.
+
 const DATA_DIR = path.join(process.cwd(), "data");
+const BLOB_PREFIX = "catalog-sync/";
+const useBlob = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+
+const cache = new Map<string, unknown>();
 
 function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function readJson<T>(file: string, fallback: T): T {
+function fsRead<T>(file: string, fallback: T): T {
   ensureDir();
   const p = path.join(DATA_DIR, file);
   if (!fs.existsSync(p)) return fallback;
@@ -19,7 +26,7 @@ function readJson<T>(file: string, fallback: T): T {
   }
 }
 
-function writeJson(file: string, data: unknown) {
+function fsWrite(file: string, data: unknown) {
   ensureDir();
   const p = path.join(DATA_DIR, file);
   const tmp = p + ".tmp";
@@ -27,18 +34,55 @@ function writeJson(file: string, data: unknown) {
   fs.renameSync(tmp, p);
 }
 
-export function getSources(): Sources {
-  return readJson<Sources>("sources.json", { master: null, wc: null, zoho: null });
+async function blobRead<T>(file: string, fallback: T): Promise<T> {
+  const { list } = await import("@vercel/blob");
+  try {
+    const { blobs } = await list({ prefix: BLOB_PREFIX + file });
+    const b = blobs.find((x) => x.pathname === BLOB_PREFIX + file);
+    if (!b) return fallback;
+    const res = await fetch(b.url, { cache: "no-store" });
+    if (!res.ok) return fallback;
+    return (await res.json()) as T;
+  } catch {
+    return fallback;
+  }
 }
 
-export function saveSources(s: Sources) {
-  writeJson("sources.json", s);
+async function blobWrite(file: string, data: unknown) {
+  const { put } = await import("@vercel/blob");
+  await put(BLOB_PREFIX + file, JSON.stringify(data), {
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json",
+  });
 }
 
-export function getDecisions(): Decisions {
-  return readJson<Decisions>("decisions.json", { products: {}, categories: {}, attributes: {} });
+async function read<T>(file: string, fallback: T): Promise<T> {
+  if (cache.has(file)) return cache.get(file) as T;
+  const data = useBlob ? await blobRead(file, fallback) : fsRead(file, fallback);
+  cache.set(file, data);
+  return data;
 }
 
-export function saveDecisions(d: Decisions) {
-  writeJson("decisions.json", d);
+async function write(file: string, data: unknown) {
+  cache.set(file, data);
+  if (useBlob) await blobWrite(file, data);
+  else fsWrite(file, data);
+}
+
+export async function getSources(): Promise<Sources> {
+  return read<Sources>("sources.json", { master: null, wc: null, zoho: null });
+}
+
+export async function saveSources(s: Sources) {
+  await write("sources.json", s);
+}
+
+export async function getDecisions(): Promise<Decisions> {
+  return read<Decisions>("decisions.json", { products: {}, categories: {}, attributes: {} });
+}
+
+export async function saveDecisions(d: Decisions) {
+  await write("decisions.json", d);
 }

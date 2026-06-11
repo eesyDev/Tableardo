@@ -45,10 +45,19 @@ export function useAppState() {
 }
 
 export async function postDecision(body: Record<string, unknown>) {
-  await fetch("/api/decision", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  try {
+    const res = await fetch("/api/decision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      throw new Error(j.error ?? `HTTP ${res.status}`);
+    }
+  } catch (e) {
+    alert(`Failed to save the decision — please try again.\n${e instanceof Error ? e.message : e}`);
+  }
+  // обновляем стейт в любом случае: после ошибки UI должен показать реальное состояние
   notifyStateChanged();
 }

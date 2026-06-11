@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Catalog Sync
 
-## Getting Started
+Internal tool that reconciles the **Master Specs** spreadsheet (source of truth) with the **WooCommerce** catalog of the JMA attachments store, and produces a clean, import-ready CSV.
 
-First, run the development server:
+## What it does
+
+1. **Upload** the Master Specs XLSX (one sheet = one category) and the WooCommerce product export CSV. A Zoho Inventory CSV is optional — Zoho metadata already lives in the WC export.
+2. **Products** — every master SKU is matched against the site: exact SKU matches are automatic, the rest get fuzzy name suggestions to review. Each decision is manual, saved, and undoable.
+3. **Categories / Attributes** — near-duplicate names and values ("Bucket Pin" vs "Bucket Pins", "Cat 307" vs "CAT 307") are grouped; you pick the canonical form once and it is applied everywhere on export.
+4. **Missing attrs** — a per-product table of master attributes that are absent on the site today.
+5. **Export** — a WooCommerce-import CSV: existing site products enriched with master data, new products as drafts (`Published=0`).
+
+The export is safe to re-import: it preserves the `global`/`visible` flags of existing site attributes (so layered-nav filters keep working), merges attribute names canonically, extends attribute column slots as needed, and escapes commas inside numeric values (`3,200 kg` → `3\,200 kg`) the way the WooCommerce importer expects.
+
+## Running locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Uploaded data and review decisions are stored in `data/*.json`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploying to Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The filesystem on Vercel is ephemeral, so the app stores its data in **Vercel Blob** when a token is present:
 
-## Learn More
+1. Create the project on Vercel (root directory: this folder).
+2. Storage → Create **Blob** store and connect it to the project — this sets `BLOB_READ_WRITE_TOKEN` automatically.
+3. Recommended: Settings → Deployment Protection → **Vercel Authentication**, so the tool isn't public.
+4. Deploy, then upload the two files through the UI.
 
-To learn more about Next.js, take a look at the following resources:
+Large transfers fit Vercel's 4.5 MB body limits because uploads are gzip-compressed by the browser and the export CSV is served gzip-encoded.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Importing the result into WooCommerce
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+WooCommerce admin → Products → **Import** → upload the CSV → tick **“Update existing products”** (matching is by ID/SKU). New products arrive as drafts. Back up the site before the first real import.
 
-## Deploy on Vercel
+## Code map
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Path | Purpose |
+|---|---|
+| `lib/parsers.ts` | XLSX/CSV parsing, SKU dedup, name cleanup |
+| `lib/match.ts` | SKU + fuzzy matching (Jaccard × Levenshtein), master-name markers |
+| `lib/queues.ts` | review queues: matches, categories, attributes, missing-attribute table |
+| `lib/store.ts` | persistence: local JSON files or Vercel Blob (with in-memory cache) |
+| `app/api/export/route.ts` | WooCommerce import CSV builder |
+| `data/decisions.json` | accumulated manual decisions (approve once — never asked again) |

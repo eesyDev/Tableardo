@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
+import { gzipSync } from "zlib";
 import Papa from "papaparse";
 import { getSources, getDecisions } from "@/lib/store";
 import type { MasterProduct } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET() {
-  const sources = getSources();
-  const decisions = getDecisions();
+  const sources = await getSources();
+  const decisions = await getDecisions();
   if (!sources.wc || !sources.master) {
     return NextResponse.json({ error: "Upload both files first" }, { status: 400 });
   }
@@ -174,9 +176,12 @@ export async function GET() {
 
   const csv = Papa.unparse({ fields: headers, data: outRows.map((r) => headers.map((h) => r[h] ?? "")) });
   const stamp = new Date().toISOString().slice(0, 10);
-  return new NextResponse("﻿" + csv, {
+  // gzip: CSV ~8 МБ не влезает в лимит ответа Vercel (4.5 МБ), браузер распакует сам
+  const body = gzipSync(Buffer.from("﻿" + csv, "utf-8"));
+  return new NextResponse(new Uint8Array(body), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
+      "Content-Encoding": "gzip",
       "Content-Disposition": `attachment; filename="woocommerce-import-${stamp}.csv"`,
     },
   });

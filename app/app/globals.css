@@ -157,6 +157,19 @@ select.input {
   border-color: var(--accent);
 }
 
+.progress {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+.progress > div {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  transition: width 0.5s ease;
+}
+
 .dropzone {
   border: 1px dashed var(--border-strong);
   border-radius: 12px;
