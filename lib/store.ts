@@ -5,9 +5,15 @@ import type { Sources, Decisions } from "./types";
 // Два бэкенда: локально — файлы в data/, на Vercel (эфемерная ФС) — Vercel Blob.
 // Тёплый инстанс держит данные в памяти и не перечитывает блоб на каждый запрос.
 
-const DATA_DIR = path.join(process.cwd(), "data");
 const BLOB_PREFIX = "catalog-sync/";
 const useBlob = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+
+// На Vercel без Blob токена пишем в /tmp (единственное доступное место)
+const DATA_DIR = useBlob
+  ? path.join(process.cwd(), "data")
+  : process.env.VERCEL
+  ? path.join("/tmp", "catalog-sync-data")
+  : path.join(process.cwd(), "data");
 
 const cache = new Map<string, unknown>();
 
