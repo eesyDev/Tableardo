@@ -21,10 +21,15 @@ const redis = useRedis
     })
   : null;
 
+const cache = new Map<string, unknown>();
+
 export async function getSources(): Promise<Sources> {
+  if (cache.has("sources")) return cache.get("sources") as Sources;
   if (redis) {
     const data = await redis.get<Sources>("sources");
-    return data ?? { master: null, wc: null, zoho: null };
+    const result = data ?? { master: null, wc: null, zoho: null };
+    cache.set("sources", result);
+    return result;
   }
   return {
     master: sourcesCache.master,
@@ -34,6 +39,7 @@ export async function getSources(): Promise<Sources> {
 }
 
 export async function saveSources(s: Sources) {
+  cache.set("sources", s);
   if (redis) {
     await redis.set("sources", s);
     return;
@@ -44,9 +50,12 @@ export async function saveSources(s: Sources) {
 }
 
 export async function getDecisions(): Promise<Decisions> {
+  if (cache.has("decisions")) return cache.get("decisions") as Decisions;
   if (redis) {
     const data = await redis.get<Decisions>("decisions");
-    return data ?? { products: {}, categories: {}, attributes: {}, gaps: {} };
+    const result = data ?? { products: {}, categories: {}, attributes: {}, gaps: {} };
+    cache.set("decisions", result);
+    return result;
   }
   return {
     products: { ...decisionsCache.products },
@@ -57,6 +66,7 @@ export async function getDecisions(): Promise<Decisions> {
 }
 
 export async function saveDecisions(d: Decisions) {
+  cache.set("decisions", d);
   if (redis) {
     await redis.set("decisions", d);
     return;
