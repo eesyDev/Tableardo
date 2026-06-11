@@ -10,6 +10,7 @@ export default function MatchesPage() {
   const { state, loading } = useAppState();
   const [filter, setFilter] = useState<Filter>("review");
   const [search, setSearch] = useState("");
+  const [bulkLoading, setBulkLoading] = useState<string | null>(null);
 
   const q = state?.queues;
   const rows = useMemo(() => q?.matches ?? [], [q]);
@@ -22,6 +23,27 @@ export default function MatchesPage() {
       all: rows,
     };
   }, [rows]);
+
+  const approveAll = async (kind: "auto" | "top" | "new") => {
+    let items: { masterSku: string; wcSku: string | null; via: string }[] = [];
+    if (kind === "auto") {
+      items = groups.auto
+        .filter((m) => !m.decision)
+        .map((m) => ({ masterSku: m.masterSku, wcSku: m.candidates[0].wcSku, via: "auto-sku" }));
+    } else if (kind === "top") {
+      items = groups.review
+        .filter((m) => m.candidates.length > 0)
+        .map((m) => ({ masterSku: m.masterSku, wcSku: m.candidates[0].wcSku, via: "fuzzy" }));
+    } else {
+      items = groups.review
+        .filter((m) => m.candidates.length === 0)
+        .map((m) => ({ masterSku: m.masterSku, wcSku: null, via: "manual" }));
+    }
+    if (items.length === 0) return;
+    setBulkLoading(kind);
+    await postDecision({ queue: "products-bulk", items });
+    setBulkLoading(null);
+  };
 
   if (loading) return <Empty text="Loading…" />;
   if (!state?.sources.master || !state?.sources.wc)
@@ -58,6 +80,26 @@ export default function MatchesPage() {
         />
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <BulkBtn
+          onClick={() => approveAll("auto")}
+          loading={bulkLoading === "auto"}
+          label={`Approve all SKU matched (${groups.auto.filter((m) => !m.decision).length})`}
+          kind="green"
+        />
+        <BulkBtn
+          onClick={() => approveAll("top")}
+          loading={bulkLoading === "top"}
+          label={`Approve all top candidates (${groups.review.filter((m) => m.candidates.length > 0).length})`}
+          kind="green"
+        />
+        <BulkBtn
+          onClick={() => approveAll("new")}
+          loading={bulkLoading === "new"}
+          label={`Approve all as new products (${groups.review.filter((m) => m.candidates.length === 0).length})`}
+        />
+      </div>
+
       {filter === "wc-only" ? (
         <WcOnlyList items={q!.wcOnly} search={search} />
       ) : (
@@ -81,6 +123,18 @@ function FilterBtn({ active, onClick, label }: { active: boolean; onClick: () =>
   return (
     <button className={`btn btn-sm ${active ? "btn-primary" : ""}`} onClick={onClick}>
       {label}
+    </button>
+  );
+}
+
+function BulkBtn({ onClick, loading, label, kind }: { onClick: () => void; loading?: boolean; label: string; kind?: "green" }) {
+  return (
+    <button
+      className={`btn btn-sm ${kind === "green" ? "btn-green" : ""}`}
+      onClick={onClick}
+      disabled={loading}
+    >
+      {loading ? "Approving…" : label}
     </button>
   );
 }

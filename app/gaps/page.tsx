@@ -112,6 +112,21 @@ export default function GapsPage() {
                   <td className="px-4 py-2.5">{r.name}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex flex-col gap-2">
+                      {r.missing.some((a) => !r.approved.includes(a)) && (
+                        <button
+                          className="btn btn-sm btn-green self-start"
+                          style={{ padding: "2px 10px", fontSize: "11px" }}
+                          onClick={() =>
+                            postDecision({
+                              queue: "gaps-bulk",
+                              masterSku: r.masterSku,
+                              attrNames: r.missing.filter((a) => !r.approved.includes(a)),
+                            })
+                          }
+                        >
+                          Approve all
+                        </button>
+                      )}
                       {r.missing.map((attr) => {
                         const isApproved = r.approved.includes(attr);
                         const value = r.values[attr] ?? "";

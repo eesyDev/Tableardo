@@ -134,7 +134,7 @@ export function parseWcCsv(text: string): { products: WcProduct[]; headers: stri
   return { products, headers };
 }
 
-/** Парсит Zoho CSV — извлекает только SKU и Carrier Weight Class */
+/** Парсит Zoho CSV / текст — извлекает SKU и Carrier Weight Class */
 export function parseZohoCsv(text: string): { carrierWeight: Record<string, string>; headers: string[] } {
   const res = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
   const headers = res.meta.fields ?? [];
@@ -142,13 +142,49 @@ export function parseZohoCsv(text: string): { carrierWeight: Record<string, stri
   const skuCol = findColumn(headers, ["sku", "item sku", "product sku", "item #", "item#"]);
   const cwCol = findColumn(headers, ["carrier weight", "carrier weight class", "weight class"]);
 
+  // текстовые колонки, где CW может быть встроен (Fit Details: ...)
+  const textCols = headers.filter((h) =>
+    /overview|subtitle|bullet|description|details|specification/i.test(h)
+  );
+
+  // названия товаров, где CW может быть встроен ("for 10 - 15 Tons Excavators")
+  const nameCols = headers.filter((h) =>
+    /item name|website title|alias name|name/i.test(h)
+  );
+
+  const cwRegex = /Carrier Weight Class:\s*([^\n\r•]+)/i;
+  const nameCwRegex = /(?:for|fits)\s+(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*(?:tons?)/i;
+
   const carrierWeight: Record<string, string> = {};
-  if (skuCol && cwCol) {
-    for (const row of res.data) {
-      const sku = cleanSku(row[skuCol]);
-      const cw = (row[cwCol] ?? "").trim();
-      if (sku && cw) carrierWeight[sku] = cw;
+  if (!skuCol) return { carrierWeight, headers };
+
+  for (const row of res.data) {
+    const sku = cleanSku(row[skuCol]);
+    if (!sku) continue;
+
+    let cw = "";
+    if (cwCol) {
+      cw = (row[cwCol] ?? "").trim();
     }
+    if (!cw) {
+      for (const col of textCols) {
+        const m = (row[col] ?? "").match(cwRegex);
+        if (m) {
+          cw = m[1].trim();
+          break;
+        }
+      }
+    }
+    if (!cw) {
+      for (const col of nameCols) {
+        const m = (row[col] ?? "").match(nameCwRegex);
+        if (m) {
+          cw = `${m[1]} - ${m[2]} tons`;
+          break;
+        }
+      }
+    }
+    if (cw) carrierWeight[sku] = cw;
   }
 
   return { carrierWeight, headers };

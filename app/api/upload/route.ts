@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSources, saveSources, getDecisions, saveDecisions } from "@/lib/store";
 
+import * as XLSX from "xlsx";
 import { parseMasterXlsx, parseWcCsv, parseZohoCsv } from "@/lib/parsers";
 
 export const runtime = "nodejs";
@@ -48,13 +49,21 @@ export async function POST(req: NextRequest) {
       decisions.products = {};
       decisions.gaps = {};
     } else {
-      console.log(`[upload] converting zoho to string...`);
-      const text = buf.toString("utf-8");
-      console.log(`[upload] string length ${text.length}, parsing zoho csv...`);
+      let text: string;
+      if (fileName.toLowerCase().endsWith(".xlsx")) {
+        console.log(`[upload] reading zoho xlsx...`);
+        const wb = XLSX.read(buf, { type: "buffer" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        text = XLSX.utils.sheet_to_csv(ws);
+        console.log(`[upload] converted xlsx to csv ${text.length} chars`);
+      } else {
+        text = buf.toString("utf-8");
+      }
+      console.log(`[upload] parsing zoho csv...`);
       const { carrierWeight, headers } = parseZohoCsv(text);
       console.log(`[upload] parsed zoho ${Object.keys(carrierWeight).length} rows`);
-      if (!headers.some((h) => /carrier weight/i.test(h))) {
-        return NextResponse.json({ error: "Zoho export doesn't have a Carrier Weight Class column" }, { status: 422 });
+      if (Object.keys(carrierWeight).length === 0) {
+        return NextResponse.json({ error: "Zoho export doesn't have a Carrier Weight Class column or it couldn't be extracted from text fields" }, { status: 422 });
       }
       sources.zoho = { fileName, uploadedAt, carrierWeight };
     }

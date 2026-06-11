@@ -78,6 +78,18 @@ export async function POST(req: NextRequest) {
       break;
     }
 
+    case "gaps-bulk": {
+      const g = decisions.gaps[body.masterSku] ?? { approved: [], at };
+      for (const attrName of body.attrNames ?? []) {
+        if (!g.approved.includes(attrName)) {
+          g.approved.push(attrName);
+        }
+      }
+      g.at = at;
+      decisions.gaps[body.masterSku] = g;
+      break;
+    }
+
     case "gaps-undo": {
       const g = decisions.gaps[body.masterSku];
       if (g) {
