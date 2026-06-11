@@ -51,10 +51,13 @@ function Dropzone({
     setBusy(true);
     setError(null);
     try {
+      console.log(`[upload] starting ${source}: ${file.name} (${file.size} bytes)`);
       const res = await fetch(`/api/upload?source=${source}&name=${encodeURIComponent(file.name)}`, {
         method: "POST",
-        body: file,
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: await file.arrayBuffer(),
       });
+      console.log(`[upload] response ${res.status}`);
       if (!res.ok) {
         const j = await res.json().catch(() => ({ error: `Upload failed (HTTP ${res.status})` }));
         setError(j.error);
@@ -62,9 +65,11 @@ function Dropzone({
         notifyStateChanged();
       }
     } catch (e) {
+      console.error(`[upload] error`, e);
       setError(`Upload failed: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   return (
