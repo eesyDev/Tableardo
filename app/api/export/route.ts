@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { gzipSync } from "zlib";
 import Papa from "papaparse";
 import { getSources, getDecisions } from "@/lib/store";
+import { SPECS_META, parseSpecsJson } from "@/lib/parsers";
 import type { MasterProduct } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -39,7 +40,15 @@ export async function GET() {
   const masterBySku = new Map<string, MasterProduct>();
   for (const p of sources.master.products) masterBySku.set(p.sku, p);
 
-  const headers = [...sources.wc.headers];
+  // выгружаем только колонки, для которых у нас есть значения: пустые Description/Images
+  // и тысяча пустых Meta-колонок при импорте с "update existing" затёрли бы данные сайта.
+  // ID не выгружаем: Zoho-синк пересоздаёт товары и ID протухают за сутки,
+  // импортёр матчит по SKU — он стабилен
+  const droppedCols = new Set(["ID", "Description", "Short description", "Images", "Tags"]);
+  const headers = sources.wc.headers.filter(
+    (h) => !droppedCols.has(h) && (!h.startsWith("Meta:") || h === SPECS_META)
+  );
+  if (!headers.includes(SPECS_META)) headers.push(SPECS_META);
   const outRows: Record<string, string>[] = [];
 
   // сколько слотов Attribute N есть в экспорте сайта
@@ -51,6 +60,25 @@ export async function GET() {
 
   // импортёр WC режет value(s) по запятым; запятая в числе ("3,200 kg") экранируется как "\,"
   const escapeCommas = (v: string) => v.replace(/(\d),(?=\d{3})/g, "$1\\,");
+
+  // Таблица спеков на странице товара рендерится темой из _custom_product_specs_data.
+  // Существующий JSON сайта канонизируем и накрываем мастер-спеками.
+  // Прямые кавычки (1/2") заменяем на ″: импортёр WC съедает бэкслэш-экранирование
+  // и ломает JSON (в старых данных уже лежит "ydu00b3" вместо "yd³" по той же причине).
+  const sanitizeSpec = (s: string) => s.replace(/"/g, "″");
+  const buildSpecs = (existingRaw: string, mp: MasterProduct | null): string => {
+    const out: Record<string, string> = {};
+    const put = (n: string, v: string) => {
+      const c = canonAttr(n, v);
+      out[sanitizeSpec(c.name)] = sanitizeSpec(c.value);
+    };
+    for (const [n, v] of Object.entries(parseSpecsJson(existingRaw) ?? {})) put(n, v);
+    for (const [n, v] of Object.entries(mp?.attrs ?? {})) {
+      if (n === "Fits To") continue; // там SKU-ссылки, не спека для покупателя
+      put(n, v);
+    }
+    return Object.keys(out).length > 0 ? JSON.stringify(out) : "";
+  };
 
   interface AttrSlot {
     name: string;
@@ -139,12 +167,15 @@ export async function GET() {
       attrSlots.push(mergeAttrs(wcP.attrs, wcP.raw, mp, approvedGaps));
       const cats = new Set<string>();
       for (const c of wcP.categories) cats.add(canonCategory(c));
-      cats.add(canonCategory(mp.category));
+      // категорию мастера добавляем только после апрува на /categories —
+      // иначе импорт насоздаёт плоских дублей иерархических категорий сайта
+      if (decisions.categories[mp.category]) cats.add(canonCategory(mp.category));
       row["Categories"] = [...cats].join(", ");
     } else {
       attrSlots.push(null); // строка сайта без пары — атрибуты не трогаем
       row["Categories"] = wcP.categories.map(canonCategory).join(", ");
     }
+    row[SPECS_META] = buildSpecs(wcP.raw[SPECS_META] ?? "", mp ?? null);
     outRows.push(row);
   }
 
@@ -158,6 +189,7 @@ export async function GET() {
     row["Name"] = mp.name;
     row["Published"] = "0"; // черновик — цены и описания заполняются на сайте
     row["Categories"] = canonCategory(mp.category);
+    row[SPECS_META] = buildSpecs("", mp);
     attrSlots.push(mergeAttrs({}, null, mp));
     outRows.push(row);
   }

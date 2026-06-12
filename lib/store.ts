@@ -21,14 +21,19 @@ const redis = useRedis
     })
   : null;
 
-const cache = new Map<string, unknown>();
+// Кэшируем только sources (несколько МБ, меняются редко) и с TTL:
+// на Vercel живут несколько инстансов, вечный кэш у одного из них
+// перезатирал бы чужие решения при read-modify-write.
+// Decisions всегда читаются из Redis свежими — они маленькие.
+let sourcesMemo: { value: Sources; at: number } | null = null;
+const SOURCES_TTL_MS = 30_000;
 
 export async function getSources(): Promise<Sources> {
-  if (cache.has("sources")) return cache.get("sources") as Sources;
   if (redis) {
+    if (sourcesMemo && Date.now() - sourcesMemo.at < SOURCES_TTL_MS) return sourcesMemo.value;
     const data = await redis.get<Sources>("sources");
     const result = data ?? { master: null, wc: null, zoho: null };
-    cache.set("sources", result);
+    sourcesMemo = { value: result, at: Date.now() };
     return result;
   }
   return {
@@ -39,9 +44,9 @@ export async function getSources(): Promise<Sources> {
 }
 
 export async function saveSources(s: Sources) {
-  cache.set("sources", s);
   if (redis) {
     await redis.set("sources", s);
+    sourcesMemo = { value: s, at: Date.now() };
     return;
   }
   sourcesCache.master = s.master ? { ...s.master } : null;
@@ -50,12 +55,9 @@ export async function saveSources(s: Sources) {
 }
 
 export async function getDecisions(): Promise<Decisions> {
-  if (cache.has("decisions")) return cache.get("decisions") as Decisions;
   if (redis) {
     const data = await redis.get<Decisions>("decisions");
-    const result = data ?? { products: {}, categories: {}, attributes: {}, gaps: {} };
-    cache.set("decisions", result);
-    return result;
+    return data ?? { products: {}, categories: {}, attributes: {}, gaps: {} };
   }
   return {
     products: { ...decisionsCache.products },
@@ -66,7 +68,6 @@ export async function getDecisions(): Promise<Decisions> {
 }
 
 export async function saveDecisions(d: Decisions) {
-  cache.set("decisions", d);
   if (redis) {
     await redis.set("decisions", d);
     return;

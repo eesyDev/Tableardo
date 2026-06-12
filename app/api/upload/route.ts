@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSources, saveSources, getDecisions, saveDecisions } from "@/lib/store";
+import { getSources, saveSources } from "@/lib/store";
 
 import * as XLSX from "xlsx";
 import { parseMasterXlsx, parseWcCsv, parseZohoCsv } from "@/lib/parsers";
@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
     console.log(`[upload] body read ${buf.length} bytes`);
 
     const sources = await getSources();
-    const decisions = await getDecisions();
     const uploadedAt = new Date().toISOString();
     console.log(`[upload] loaded current state`);
 
@@ -34,8 +33,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "No rows with SKU found — is this really the master file?" }, { status: 422 });
       }
       sources.master = { fileName, uploadedAt, products };
-      decisions.products = {};
-      decisions.gaps = {};
     } else if (source === "wc") {
       console.log(`[upload] converting to string...`);
       const text = buf.toString("utf-8");
@@ -46,8 +43,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Doesn't look like a WooCommerce export: no SKU/Name columns" }, { status: 422 });
       }
       sources.wc = { fileName, uploadedAt, products, headers };
-      decisions.products = {};
-      decisions.gaps = {};
     } else {
       let text: string;
       if (fileName.toLowerCase().endsWith(".xlsx")) {
@@ -70,8 +65,6 @@ export async function POST(req: NextRequest) {
 
     console.log(`[upload] saving sources...`);
     await saveSources(sources);
-    console.log(`[upload] saving decisions...`);
-    await saveDecisions(decisions);
     console.log(`[upload] done`);
     return NextResponse.json({ ok: true });
   } catch (e) {

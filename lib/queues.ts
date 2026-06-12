@@ -247,7 +247,11 @@ export function buildGapRows(sources: Sources, decisions: Decisions): GapRow[] {
     if (!wcP) continue;
 
     const siteNames = new Set(Object.keys(wcP.attrs).map(canon));
-    const missingEntries = Object.entries(mp.attrs).filter(([n, v]) => v.trim() && !siteNames.has(canon(n)));
+    // в очередь идут только filter-поля мастера: таблица спеков на странице
+    // заполняется экспортом автоматически, апрув решает лишь судьбу фильтров
+    const missingEntries = Object.entries(mp.attrs).filter(
+      ([n, v]) => mp.filterAttrs.includes(n) && v.trim() && !siteNames.has(canon(n))
+    );
     const missing = [...new Set(missingEntries.map(([n]) => canon(n)))];
     if (missing.length > 0) {
       const approved = decisions.gaps[mp.sku]?.approved ?? [];

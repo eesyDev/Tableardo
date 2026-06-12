@@ -86,6 +86,31 @@ function dedupeBySku(products: MasterProduct[]): MasterProduct[] {
   return [...bySku.values()];
 }
 
+/** Meta-поле, из которого тема сайта рендерит таблицу спеков на странице товара */
+export const SPECS_META = "Meta: _custom_product_specs_data";
+
+/**
+ * JSON из _custom_product_specs_data. В данных с сайта юникод-эскейпы повреждены
+ * прошлым импортом (бэкслэш съеден: "ydu00b3" вместо "yd³") — восстанавливаем.
+ */
+export function parseSpecsJson(s: string): Record<string, string> | null {
+  if (!s || !s.trim()) return null;
+  try {
+    const cleaned = s
+      .replace(/u00b3/g, "³")
+      .replace(/u00b2/g, "²")
+      .replace(/u00b7/g, "·");
+    const obj = JSON.parse(cleaned) as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (k && v !== null && v !== undefined && String(v).trim()) out[k] = String(v).trim();
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
 /** Парсит экспорт WooCommerce */
 export function parseWcCsv(text: string): { products: WcProduct[]; headers: string[] } {
   const res = Papa.parse<Record<string, string>>(text, {
@@ -110,27 +135,30 @@ export function parseWcCsv(text: string): { products: WcProduct[]; headers: stri
     }
 
     // кастомные спеки из meta-поля — там часто лежит полная копия мастер-атрибутов
-    const specsRaw = row["Meta: _custom_product_specs_data"] ?? "";
-    if (specsRaw) {
-      try {
-        // some exports contain escaped unicode like ydu00b3 instead of yd³
-        const cleaned = specsRaw
-          .replace(/u00b3/g, "³")
-          .replace(/u00b2/g, "²")
-          .replace(/u00b7/g, "·");
-        const specs = JSON.parse(cleaned) as Record<string, string>;
-        for (const [k, v] of Object.entries(specs)) {
-          if (k && v && !attrs[k]) attrs[k] = String(v).trim();
-        }
-      } catch {
-        // ignore malformed JSON
+    const specs = parseSpecsJson(row[SPECS_META] ?? "");
+    if (specs) {
+      for (const [k, v] of Object.entries(specs)) {
+        if (!attrs[k]) attrs[k] = v;
       }
     }
 
-    // отсекаем тяжёлые/ненужные поля из raw — иначе Redis не тянет гигантский JSON
+    // Zoho subtitle часто содержит спеки в формате "Key: Value"
+    const subtitleRaw = row["Meta: _zoho_website_subtitle"] ?? "";
+    if (subtitleRaw) {
+      for (const line of subtitleRaw.split(/\r?\n/)) {
+        const idx = line.indexOf(":");
+        if (idx <= 0) continue;
+        const k = line.slice(0, idx).trim();
+        const v = line.slice(idx + 1).trim();
+        if (k && v && !attrs[k]) attrs[k] = v;
+      }
+    }
+
+    // отсекаем тяжёлые/ненужные поля из raw — иначе Redis не тянет гигантский JSON.
+    // SPECS_META оставляем: экспорт должен уметь сохранить существующие спеки сайта.
     const raw: Record<string, string> = {};
     for (const [k, v] of Object.entries(row)) {
-      if (k.startsWith("Meta:")) continue;
+      if (k.startsWith("Meta:") && k !== SPECS_META) continue;
       if (heavyCols.has(k)) continue;
       raw[k] = v;
     }
