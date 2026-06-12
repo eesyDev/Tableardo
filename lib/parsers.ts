@@ -100,10 +100,31 @@ export function parseWcCsv(text: string): { products: WcProduct[]; headers: stri
     if ((row["Type"] ?? "").trim().toLowerCase() !== "simple") continue;
     const sku = (row["SKU"] ?? "").trim();
     const attrs: Record<string, string> = {};
-    for (let i = 1; i <= 14; i++) {
-      const an = (row[`Attribute ${i} name`] ?? "").trim();
-      const av = (row[`Attribute ${i} value(s)`] ?? "").trim();
+    // динамически собираем все слоты Attribute N, а не фиксированные 14
+    for (const key of headers) {
+      const m = key.match(/^Attribute (\d+) name$/);
+      if (!m) continue;
+      const an = row[key]?.trim() ?? "";
+      const av = row[`Attribute ${m[1]} value(s)`]?.trim() ?? "";
       if (an && av) attrs[an] = av;
+    }
+
+    // кастомные спеки из meta-поля — там часто лежит полная копия мастер-атрибутов
+    const specsRaw = row["Meta: _custom_product_specs_data"] ?? "";
+    if (specsRaw) {
+      try {
+        // some exports contain escaped unicode like ydu00b3 instead of yd³
+        const cleaned = specsRaw
+          .replace(/u00b3/g, "³")
+          .replace(/u00b2/g, "²")
+          .replace(/u00b7/g, "·");
+        const specs = JSON.parse(cleaned) as Record<string, string>;
+        for (const [k, v] of Object.entries(specs)) {
+          if (k && v && !attrs[k]) attrs[k] = String(v).trim();
+        }
+      } catch {
+        // ignore malformed JSON
+      }
     }
 
     // отсекаем тяжёлые/ненужные поля из raw — иначе Redis не тянет гигантский JSON

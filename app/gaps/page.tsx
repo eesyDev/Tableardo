@@ -97,21 +97,25 @@ export default function GapsPage() {
           <table className="w-full text-[13px]">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-dim)" }}>
-                <th className="text-left font-medium px-4 py-2.5 w-[110px]">SKU</th>
-                <th className="text-left font-medium px-4 py-2.5">Product</th>
-                <th className="text-left font-medium px-4 py-2.5">Attribute → Value</th>
-                <th className="text-right font-medium px-4 py-2.5 w-[80px]">Status</th>
+                <th className="text-left font-medium px-3 py-2.5 w-[90px]">SKU</th>
+                <th className="text-left font-medium px-3 py-2.5 w-[220px]">Product</th>
+                <th className="text-left font-medium px-3 py-2.5 min-w-[420px]">Attribute → Value</th>
+                <th className="text-right font-medium px-3 py-2.5 w-[70px]">Status</th>
               </tr>
             </thead>
             <tbody>
               {filtered.slice(0, 200).map((r) => (
                 <tr key={r.masterSku} style={{ borderBottom: "1px solid var(--border)" }} className="align-top">
-                  <td className="px-4 py-2.5 mono" style={{ color: "var(--text-dim)" }}>
+                  <td className="px-3 py-2 mono text-[12px]" style={{ color: "var(--text-dim)" }}>
                     {r.wcSku}
                   </td>
-                  <td className="px-4 py-2.5">{r.name}</td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex flex-col gap-2">
+                  <td className="px-3 py-2">
+                    <div className="truncate text-[12px]" title={r.name}>
+                      {r.name}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-1.5">
                       {r.missing.some((a) => !r.approved.includes(a)) && (
                         <button
                           className="btn btn-sm btn-green self-start"
@@ -134,34 +138,33 @@ export default function GapsPage() {
                         return (
                           <div
                             key={attr}
-                            className="flex items-center gap-2 rounded-lg px-3 py-2"
+                            className="flex items-center justify-between gap-2 rounded-md px-2 py-1"
                             style={{
                               background: isApproved ? "var(--green-dim)" : "var(--bg-hover)",
                               border: `1px solid ${isApproved ? "var(--green)" : "var(--border)"}`,
                             }}
                           >
-                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span
-                                  className="font-medium text-[13px]"
-                                  style={{ color: isApproved ? "var(--green)" : "var(--text)" }}
-                                >
-                                  {attr}
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <span
+                                className="font-medium text-[11px] truncate"
+                                style={{ color: isApproved ? "var(--green)" : "var(--text)", maxWidth: "180px" }}
+                                title={attr}
+                              >
+                                {attr}
+                              </span>
+                              {isFilter && (
+                                <span className="text-[9px] px-1 rounded" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>
+                                  filter
                                 </span>
-                                {isFilter && (
-                                  <span className="badge badge-accent" title="Will become a site filter (global=1)">
-                                    filter
-                                  </span>
-                                )}
-                              </div>
-                              <span className="mono text-[12px] truncate" style={{ color: "var(--text-dim)" }}>
-                                {value}
+                              )}
+                              <span className="mono text-[10px] truncate" style={{ color: "var(--text-dim)", maxWidth: "160px" }} title={value}>
+                                → {value}
                               </span>
                             </div>
                             {isApproved ? (
                               <button
-                                className="btn btn-sm"
-                                style={{ padding: "2px 10px", fontSize: "11px" }}
+                                className="btn btn-sm shrink-0"
+                                style={{ padding: "1px 8px", fontSize: "10px" }}
                                 onClick={() =>
                                   postDecision({ queue: "gaps-undo", masterSku: r.masterSku, attrName: attr })
                                 }
@@ -170,8 +173,8 @@ export default function GapsPage() {
                               </button>
                             ) : (
                               <button
-                                className="btn btn-sm btn-green"
-                                style={{ padding: "2px 10px", fontSize: "11px" }}
+                                className="btn btn-sm btn-green shrink-0"
+                                style={{ padding: "1px 8px", fontSize: "10px" }}
                                 onClick={() =>
                                   postDecision({ queue: "gaps", masterSku: r.masterSku, attrName: attr })
                                 }
@@ -184,7 +187,7 @@ export default function GapsPage() {
                       })}
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="px-3 py-2 text-right">
                     {r.approved.length === r.missing.length ? (
                       <span className="badge badge-green">all</span>
                     ) : r.approved.length > 0 ? (

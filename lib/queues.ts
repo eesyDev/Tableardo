@@ -210,6 +210,7 @@ function attrNameCanonMap(decisions: Decisions, master: MasterProduct[], wc: WcP
   for (const [key, d] of Object.entries(decisions.attributes)) {
     if (d.status !== "approved") continue;
     m.set(key, d.canonicalName);
+    m.set(d.canonicalName, d.canonicalName); // canonical name maps to itself
     for (const variant of Object.keys(d.values)) {
       if (variant.startsWith("name:")) m.set(variant.slice(5), d.canonicalName);
     }
